@@ -137,11 +137,19 @@ export class Browser {
     this.webArray[key].title = title.length > 0 ? title : DEFAULT_TAB_TITLE
   }
 
-  // 同步前进/后退可用状态：页面加载结束、页签切换后调用
+  // 同步前进/后退可用状态：页面加载结束、页签切换后调用。
+  // 新建页签后 Web 组件尚未挂载时，controller 未关联 Web 组件，
+  // accessBackward/accessForward 会抛 17100001，这里兜底为不可前进/后退。
   updateHistoryState() {
     const controller = this.webControllerArray[this.tabArrayIndex]?.controller;
-    this.canBack = controller?.accessBackward() ?? false;
-    this.canForward = controller?.accessForward() ?? false;
+    try {
+      this.canBack = controller?.accessBackward() ?? false;
+      this.canForward = controller?.accessForward() ?? false;
+    } catch (error) {
+      Logger.error(TAG, `updateHistoryState failed: ${JSON.stringify(error)}`);
+      this.canBack = false;
+      this.canForward = false;
+    }
   }
 
   setInputVal(inputValue: string) {
@@ -162,15 +170,25 @@ export class Browser {
 
   Back() {
     const controller = this.webControllerArray[this.tabArrayIndex]?.controller;
-    if (controller?.accessBackward()) {
-      controller.backward();
+    // 新页签 Web 未挂载时 accessBackward 抛 17100001，兜底为忽略点击
+    try {
+      if (controller?.accessBackward()) {
+        controller.backward();
+      }
+    } catch (error) {
+      Logger.error(TAG, `Back failed: ${JSON.stringify(error)}`);
     }
   }
 
   Forward() {
     const controller = this.webControllerArray[this.tabArrayIndex]?.controller;
-    if (controller?.accessForward()) {
-      controller.forward();
+    // 同 updateHistoryState：Web 未挂载时 accessForward 抛 17100001，兜底忽略
+    try {
+      if (controller?.accessForward()) {
+        controller.forward();
+      }
+    } catch (error) {
+      Logger.error(TAG, `Forward failed: ${JSON.stringify(error)}`);
     }
   }
 

@@ -6,27 +6,31 @@
     },
     {
       "name": "page_bg",
-      "value": "#FDFDFD"
+      "value": "#FFFFFF"
     },
     {
       "name": "tab_bar_bg",
-      "value": "#ECECEC"
+      "value": "#DEE1E6"
     },
     {
       "name": "tab_active_bg",
       "value": "#FFFFFF"
     },
     {
+      "name": "omnibox_bg",
+      "value": "#F1F3F4"
+    },
+    {
       "name": "divider_color",
-      "value": "#C6C6C6"
+      "value": "#DADCE0"
     },
     {
       "name": "divider_light",
-      "value": "#E9EAEC"
+      "value": "#E8EAED"
     },
     {
       "name": "press_bg",
-      "value": "#E4E4E4"
+      "value": "#E8EAED"
     },
     {
       "name": "transparent",
@@ -34,11 +38,15 @@
     },
     {
       "name": "progress_blue",
-      "value": "#0A59F7"
+      "value": "#1A73E8"
     },
     {
       "name": "text_primary",
-      "value": "#000000"
+      "value": "#202124"
+    },
+    {
+      "name": "fg_secondary",
+      "value": "#5F6368"
     }
   ]
 }

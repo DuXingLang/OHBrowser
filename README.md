@@ -49,7 +49,7 @@ tests/
   + 用 mediaquery 监听窗口宽度断点 `(width<600vp)` 决定布局，手机横竖屏、平板分屏与 2in1 自由窗口缩放都能正确切换；断点查询失败时退回设备形态判定;
   + 起始首页按设备形态选定后运行期不再变化，Web 组件常驻组件树，横竖屏切换时不销毁，浏览状态不丢失;
 + 首页页面：[phone.html](entry/src/main/resources/rawfile/phone.html) 与 [pad.html](entry/src/main/resources/rawfile/pad.html)
-  + 页面自绘深浅色变量（prefers-color-scheme），站点栅格按宽度自适应并在矮屏/横屏时压缩留白，站点区可滚动。
+  + 页面自绘深浅色变量（prefers-color-scheme），站点栅格按宽度自适应并在矮屏/横屏时压缩留白，站点区可滚动；默认快捷站点含百度（https://baidu.com）等入口，点击图标直接访问。
 
 ### 相关权限
 
@@ -66,7 +66,7 @@ tests/
 1. 本示例仅支持标准系统上运行;
 2. 本示例已适配API version 12版本SDK（OpenHarmony 5.0.0 Release），版本号：5.0.0.12;
 3. 本示例需要使用DevEco Studio 5.0.0及以上版本（配套hvigor 3.0.9）才可编译运行;
-4. 单元测试与静态检查依赖Node.js 22.6+：根目录执行 `node --test` 运行单测，执行 `npm run check`（即 `node tests/check-json5.mjs && node tests/check-resources.mjs && node tests/check-structure.mjs`）运行静态检查。
+4. 单元测试与静态检查依赖Node.js 22.6+：根目录执行 `node --test` 运行单测，依次执行 `node tests/check-json5.mjs`、`node tests/check-resources.mjs`、`node tests/check-structure.mjs` 运行静态检查（工程不提供 npm 脚本，避免根目录 package.json 与 oh-package.json5 冲突）。
 
 ### 下载
 

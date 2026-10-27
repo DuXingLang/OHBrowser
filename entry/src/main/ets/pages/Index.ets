@@ -90,7 +90,7 @@ struct Index {
           .color($r('app.color.progress_blue'))
           .visibility(this.browser.hideProgress ? Visibility.Hidden : Visibility.Visible)
           .flexShrink(0)
-        BrowserTabs({ browser: $browser })
+        // 页签条已内置于 TabletTitle（页签条 + 工具栏一体），此处不再重复渲染
         Divider().color($r('app.color.divider_color')).width('100%').flexShrink(0)
       }
       // WebTab 常驻组件树：横竖屏切换仅切换标题栏/工具栏，Web 不销毁，浏览状态不丢失

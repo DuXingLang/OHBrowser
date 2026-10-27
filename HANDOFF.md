@@ -19,14 +19,16 @@
 ## 二、当前状态
 
 - 第一轮（`164919b`，25 文件 +733/−315）：5.x 迁移、核心重写、深浅色资源、HTML 语法修复、首页布局、formatUrl 单测。
-- 第二轮（本轮）：补齐**静态测试层**，据此找出并修复 10 项缺陷；布局判定改为窗口宽度断点；首页 HTML 改自绘深浅色 + 自适应栅格；文档三件套同步。
-- 两轮改动均已在 master，工作区干净。
+- 第二轮（`90d35e7`）：补齐**静态测试层**，据此找出并修复 10 项缺陷；布局判定改为窗口宽度断点；首页 HTML 改自绘深浅色 + 自适应栅格；文档三件套同步。
+- 第三轮（本轮）：修复新增页签崩溃（17100001）、顶栏按 Chrome 风格重做（页签条 + 药丸地址栏 + 圆形按钮）、删除与 oh-package.json5 冲突的根目录 package.json、首页新增百度快捷入口。
 
 ## 三、验证怎么跑（本机可跑，无需 SDK）
 
 ```bash
-node --test            # 单元测试：7 用例
-npm run check          # = check-json5 && check-resources && check-structure
+node --test                     # 单元测试：7 用例
+node tests/check-json5.mjs      # 静态检查：json5 配置可解析
+node tests/check-resources.mjs  # 静态检查：资源引用均已定义
+node tests/check-structure.mjs  # 静态检查：导入符号 / ForEach / rawfile HTML
 ```
 
 当前基线结果（改动后必须仍然全绿）：
@@ -34,8 +36,8 @@ npm run check          # = check-json5 && check-resources && check-structure
 ```
 node --test                    → 7 pass / 0 fail
 node tests/check-json5.mjs     → 8 个 json5 配置全部解析通过
-node tests/check-resources.mjs → 15 个源文件 39 处源码资源引用、4 个配置文件 16 处配置引用全部命中
-node tests/check-structure.mjs → 15 个源文件 14 处相对导入、5 处 ForEach、4 个 HTML 全部符合约束
+node tests/check-resources.mjs → 15 个源文件 46 处源码资源引用、4 个配置文件 16 处配置引用全部命中
+node tests/check-structure.mjs → 15 个源文件 15 处相对导入、5 处 ForEach、4 个 HTML 全部符合约束
 ```
 
 ## 四、本轮关键改动（含“为什么”）
@@ -62,6 +64,13 @@ node tests/check-structure.mjs → 15 个源文件 14 处相对导入、5 处 Fo
 - `homeIsPhone` 只在启动时确定一次：手机→phone.html、平板/2in1→pad.html、形态未知按启动宽度；这样旋转时 Web 的 `src` 不变，配合 WebTab 常驻组件树，**旋转不重载、浏览状态不丢**。
 - 首页 HTML：CSS 变量 + `prefers-color-scheme` 自绘深浅色；站点区 `flex:1 + overflow-y:auto`；横屏/矮屏压缩留白；输入框左右留白修正。
 
+### 第三轮（崩溃修复 + Chrome 风格顶栏）
+- **17100001 崩溃**：`addTab`/`deleteTab` 后 50ms 调 `updateHistoryState()`，此时新页签的 Web 组件尚未挂载，`accessBackward()` 抛 `The WebviewController must be associated with a Web component`。修复：`updateHistoryState`、`Back`、`Forward` 与两处主页按钮 `loadUrl` 全部 try/catch 兜底（失败视为无历史）。
+- **顶栏重做（Chrome 风格）**：`TabletTitle` = 页签条（横向可滚动 + 新建页签按钮）+ 工具栏（圆形前进/后退/主页 + 药丸地址栏 + 刷新）；手机 `PhoneHeader` 改药丸地址栏，`PhoneToolBar` 改 5 键均分；索引页签条不再重复渲染。
+- **配色**：base/dark `color.json` 换 Chrome 调色板（`omnibox_bg` #F1F3F4/#202124、`text_primary`、`fg_secondary` 等）。
+- **删除根目录 package.json**：与 `oh-package.json5` 重复导致无法编译打包；测试改为直接 `node` 执行，不再依赖 npm 脚本。
+- **首页新增百度快捷入口**：`phone.html` / `pad.html` 站点数组首位加入 `./baidu.png` → `baidu.com`。
+
 ## 五、未闭环（环境限制，非代码问题）
 
 - 本机无 DevEco Studio / OpenHarmony SDK / hvigorw，**未做编译与真机运行验证**。换有 DevEco 5.0+ 的环境执行 `hvigorw assembleHap` 复核 ArkTS 严格模式告警。
@@ -71,7 +80,7 @@ node tests/check-structure.mjs → 15 个源文件 14 处相对导入、5 处 Fo
 
 1. **PowerShell 执行策略拦 npm 脚本**：`npm test` 可能报 UnauthorizedAccess。用 `node --test` / `node tests/xxx.mjs` 直跑。
 2. **`node --test tests/` 在 Windows 上把目录当模块加载报 MODULE_NOT_FOUND**：用 `node --test`（无参）或指定文件。
-3. **Node 单测直接 import 应用源码可行**（Node ≥22.6 默认剥离 TS 类型），不要复制逻辑到测试；`package.json` 必须有 `"type": "module"`。
+3. **Node 单测直接 import 应用源码可行**（Node ≥22.6 默认剥离 TS 类型），不要复制逻辑到测试。**根目录不要再放 package.json**——与 oh-package.json5 冲突会导致无法编译打包；`.mjs` 天然 ESM，语法探测会把 `import/export` 的 .ts 当 ESM 处理。
 4. **ArkTS 跨文件引用的类/枚举必须 export**（`@Observed export class WebKey`）。
 5. **ForEach 必须写第三个 keyGenerator 参数**。
 6. **长文件一次性 write 后必须 read 回来核对**（历史上 TitleBar.ets 被写坏过一次：内容截断 + 杂散字符）。
@@ -86,6 +95,7 @@ node tests/check-structure.mjs → 15 个源文件 14 处相对导入、5 处 Fo
 15. **pad.html 的 `adapterDevice` 现在是空实现**（原来靠改 viewport 写死 `width=720`，与 device-width 自适应冲突）。函数名不能删——ArkTS `onPageEnd` 会 `runJavaScript('adapterDevice()')` 调用它（`TitleBar.ets`）。
 16. git 提交后 LF→CRLF warning 是 Windows 正常现象，无需处理。
 17. `Browser.ets` 里 `import { formatUrl } from './UrlFormatter'; export { formatUrl };` 这两行是给外部与单测用的转出，**别删**。
+18. **`WebDarkMode` 不能裸写**：必须 `import webview from '@ohos.web.webview'` 后用 `webview.WebDarkMode.Auto`；`loadUrl`/`accessBackward`/`accessForward` 在 Web 未挂载时抛 17100001，必须 try/catch，否则点击新增页签即崩溃。
 
 ## 七、关键文件地图
 

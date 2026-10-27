@@ -13,26 +13,33 @@
  * limitations under the License.
  */
 import { Browser, LoadingStatus, WebKey, WebObject } from '../model/Browser';
+import webview from '@ohos.web.webview';
 import Logger from '../model/Logger';
 import { promptAction } from '@kit.ArkUI';
 
 const TAG: string = '[TitleBar]';
-// 无障碍建议的最小点击热区（vp）
-const BUTTON_WIDTH: number = 40;
-// 图标显示尺寸
-const ICON_SIZE: number = 24;
-const BUTTON_RADIUS: number = 4;
-// 页签固定宽度
-const TAB_WIDTH: number = 180;
-// 页签条高度
-const TAB_BAR_HEIGHT: number = 33;
-// 页签关闭按钮尺寸
-const CLOSE_BUTTON_SIZE: number = 33;
-const CLOSE_ICON_SIZE: number = 20;
-// 不可用按钮的透明度，用于表达“前进/后退”当前不可点击
-const DISABLED_OPACITY: number = 0.4;
+// 圆形图标按钮直径（无障碍建议的最小点击热区）
+const BUTTON_SIZE: number = 36;
+// 工具栏与地址栏图标尺寸
+const ICON_SIZE: number = 20;
+const OMNIBOX_ICON_SIZE: number = 16;
+// 地址栏（药丸）高度与圆角
+const OMNIBOX_HEIGHT: number = 36;
+const OMNIBOX_RADIUS: number = 18;
+// 页签条与单个页签高度
+const TAB_STRIP_HEIGHT: number = 40;
+const TAB_HEIGHT: number = 34;
+// 页签固定宽度与页签关闭按钮尺寸
+const TAB_WIDTH: number = 200;
+const CLOSE_BUTTON_SIZE: number = 24;
+const CLOSE_ICON_SIZE: number = 16;
+// 工具栏高度与不可用按钮透明度
+const TOOLBAR_HEIGHT: number = 48;
+const DISABLED_OPACITY: number = 0.38;
+// 页签条右侧“新建页签”按钮尺寸
+const NEW_TAB_SIZE: number = 28;
 
-interface TitleButtonItem {
+interface ToolButtonItem {
   imageSrc: Resource,
   id: number
 }
@@ -42,7 +49,7 @@ export struct TabletTitle {
   @Link browser: Browser;
   @State arrayIndex: number = 0;
   private addr: string = '';
-  private navigationButton: TitleButtonItem[] = [
+  private toolButton: ToolButtonItem[] = [
     {
       imageSrc: $r('app.media.ic_public_back'),
       id: 1
@@ -52,22 +59,8 @@ export struct TabletTitle {
       id: 2
     },
     {
-      imageSrc: $r('app.media.ic_public_refresh'),
-      id: 3
-    },
-    {
       imageSrc: $r('app.media.ic_public_home'),
       id: 4
-    },
-  ]
-  private actionButton: TitleButtonItem[] = [
-    {
-      imageSrc: $r('app.media.submit'),
-      id: 5
-    },
-    {
-      imageSrc: $r('app.media.ic_public_add'),
-      id: 6
     },
   ]
 
@@ -83,102 +76,158 @@ export struct TabletTitle {
   }
 
   build() {
-    Row() {
-      ForEach(this.navigationButton, (item: TitleButtonItem, index: number) => {
-        Button({ type: ButtonType.Normal }) {
-          Image(item.imageSrc).width(ICON_SIZE).height(ICON_SIZE).opacity(this.navOpacity(item.id))
+    Column() {
+      // 页签条：横向滚动 + 新建页签按钮，激活页签白底顶部圆角，与下方工具栏融为一体
+      Row() {
+        Scroll() {
+          Row({ space: 4 }) {
+            ForEach(this.browser.webArray, (item: WebKey, index: number) => {
+              TabItem({
+                item: item,
+                active: this.browser.tabArrayIndex === item.key,
+                onSelect: (key: number) => {
+                  Logger.info(TAG, `key= ${key}`);
+                  // 关闭按钮与页签选择同源事件时可能收到已失效的下标，越界直接忽略
+                  if (key < 0 || key >= this.browser.webArray.length) {
+                    return;
+                  }
+                  this.browser.setTabArrayIndex(key);
+                  this.browser.tabsController.changeIndex(key);
+                  this.browser.updateHistoryState();
+                },
+                onClose: (key: number) => {
+                  this.browser.deleteTab(key);
+                }
+              })
+            }, (item: WebKey) => item.timestamp.toString())
+          }
+          .alignItems(VerticalAlign.Bottom)
+          .height('100%')
         }
-        .margin(8)
-        .id(`navigationButton${index}`)
-        .width(BUTTON_WIDTH)
-        .height(BUTTON_WIDTH)
-        .backgroundColor(this.arrayIndex === item.id ? $r('app.color.press_bg') : $r('app.color.transparent'))
-        .borderRadius(BUTTON_RADIUS)
-        .flexShrink(0)
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
-            this.arrayIndex = item.id;
-          }
-
-          if (event.type === TouchType.Up) {
-            this.arrayIndex = 0;
-          }
-        })
-        .onClick((event: ClickEvent) => {
-          switch (item.id) {
-            case 1:
-              this.browser.Back();
-              break;
-            case 2:
-              this.browser.Forward();
-              break;
-            case 3:
-              this.browser.Refresh();
-              break;
-            case 4:
-              this.browser.webControllerArray[this.browser.tabArrayIndex]?.controller
-                .loadUrl($rawfile('pad.html'));
-              break;
-          }
-        })
-      }, (item: TitleButtonItem) => item.id.toString())
-
-      TextInput({ placeholder: $r('app.string.Input_url'), text: this.browser.inputValue })
-        .placeholderFont({ size: 18, weight: 500 })
-        .fontSize(18)
-        .margin(2)
-        .id('inputUrl')
+        .scrollable(ScrollDirection.Horizontal)
+        .scrollBar(BarState.Off)
         .layoutWeight(1)
-        .onChange((value: string) => {
-          this.addr = value;
-        })
-        .enterKeyType(EnterKeyType.Go)
-        .onSubmit((enterKey: EnterKeyType) => {
-          Logger.info(TAG, `onSubmit`)
-          if (this.addr.length !== 0) {
-            // 统一走 Browser.loadUrl，由 formatUrl 做协议补全与搜索词归一化
-            this.browser.loadUrl(this.addr);
-            this.addr = '';
-          }
-        })
+        .height('100%')
 
-      ForEach(this.actionButton, (item: TitleButtonItem, index: number) => {
-        Button({ type: ButtonType.Normal }) {
-          Image(item.imageSrc).width(ICON_SIZE).height(ICON_SIZE)
+        Button({ type: ButtonType.Normal, stateEffect: true }) {
+          Image($r('app.media.ic_public_add')).width(16).height(16)
         }
-        .margin(8)
-        .id(`actionButton${index}`)
-        .width(BUTTON_WIDTH)
-        .height(BUTTON_WIDTH)
-        .backgroundColor(this.arrayIndex === item.id ? $r('app.color.press_bg') : $r('app.color.transparent'))
-        .borderRadius(BUTTON_RADIUS)
-        .flexShrink(0)
-        .onTouch((event: TouchEvent) => {
-          if (event.type === TouchType.Down) {
-            this.arrayIndex = item.id;
-          }
-          if (event.type === TouchType.Up) {
-            this.arrayIndex = 0;
-          }
-        })
+        .id('newTabButton')
+        .width(28)
+        .height(28)
+        .borderRadius(6)
+        .backgroundColor($r('app.color.transparent'))
+        .margin({ right: 8 })
+        .accessibilityText('新建页签')
         .onClick((event: ClickEvent) => {
-          if (item.id === 5) {
-            if (this.addr.length !== 0) {
-              // 统一走 Browser.loadUrl，由 formatUrl 做协议补全与搜索词归一化
-              this.browser.loadUrl(this.addr);
-              this.addr = '';
-            }
-          } else if (item.id === 6) {
-            Logger.info(TAG, `add tab index = ` + this.arrayIndex);
-            this.browser.addTab();
-          }
+          this.browser.addTab();
         })
-      }, (item: TitleButtonItem) => item.id.toString())
+      }
+      .width('100%')
+      .height(TAB_STRIP_HEIGHT)
+      .padding({ left: 4, right: 4 })
+      .backgroundColor($r('app.color.tab_bar_bg'))
+      .alignItems(VerticalAlign.Bottom)
+
+      Row() {
+        ForEach(this.toolButton, (item: ToolButtonItem, index: number) => {
+          Button({ type: ButtonType.Normal, stateEffect: true }) {
+            Image(item.imageSrc).width(ICON_SIZE).height(ICON_SIZE).opacity(this.navOpacity(item.id))
+          }
+          .id(`toolButton${item.id}`)
+          .width(BUTTON_SIZE)
+          .height(BUTTON_SIZE)
+          .borderRadius(BUTTON_SIZE / 2)
+          .margin({ left: 2, right: 2 })
+          .backgroundColor(this.arrayIndex === item.id ? $r('app.color.press_bg') : $r('app.color.transparent'))
+          .flexShrink(0)
+          .onTouch((event: TouchEvent) => {
+            if (event.type === TouchType.Down) {
+              this.arrayIndex = item.id;
+            }
+            if (event.type === TouchType.Up) {
+              this.arrayIndex = 0;
+            }
+          })
+          .onClick((event: ClickEvent) => {
+            switch (item.id) {
+              case 1:
+                this.browser.Back();
+                break;
+              case 2:
+                this.browser.Forward();
+                break;
+              case 4:
+                // 主页：加载内置平板首页；Web 未挂载时 loadUrl 抛 17100001，兜底忽略
+                try {
+                  this.browser.webControllerArray[this.browser.tabArrayIndex]?.controller
+                    .loadUrl($rawfile('pad.html'));
+                } catch (error) {
+                  Logger.error(TAG, `loadHome failed: ${JSON.stringify(error)}`);
+                }
+                break;
+              default:
+                break;
+            }
+          })
+        }, (item: ToolButtonItem) => item.id.toString())
+
+        // Chrome 风格药丸地址栏：左置 globe 图标，右置刷新按钮，输入区居中
+        Row() {
+          Image($r('app.media.ic_public_navigation'))
+            .width(OMNIBOX_ICON_SIZE)
+            .height(OMNIBOX_ICON_SIZE)
+            .opacity(0.55)
+            .flexShrink(0)
+
+          TextInput({ placeholder: $r('app.string.Input_url'), text: this.browser.inputValue })
+            .placeholderFont({ size: 14 })
+            .fontSize(14)
+            .height(32)
+            .id('inputUrl')
+            .layoutWeight(1)
+            .backgroundColor($r('app.color.transparent'))
+            .padding({ left: 6, right: 0 })
+            .onChange((value: string) => {
+              this.addr = value;
+            })
+            .enterKeyType(EnterKeyType.Go)
+            .onSubmit((enterKey: EnterKeyType) => {
+              Logger.info(TAG, `onSubmit`)
+              if (this.addr.length !== 0) {
+                // 统一走 Browser.loadUrl，由 formatUrl 做协议补全与搜索词归一化
+                this.browser.loadUrl(this.addr);
+                this.addr = '';
+              }
+            })
+
+          Button({ type: ButtonType.Normal, stateEffect: true }) {
+            Image($r('app.media.ic_public_refresh')).width(OMNIBOX_ICON_SIZE).height(OMNIBOX_ICON_SIZE)
+          }
+          .width(32)
+          .height(32)
+          .borderRadius(16)
+          .backgroundColor($r('app.color.transparent'))
+          .flexShrink(0)
+          .accessibilityText('刷新网页')
+          .onClick((event: ClickEvent) => {
+            this.browser.Refresh();
+          })
+        }
+        .height(OMNIBOX_HEIGHT)
+        .borderRadius(OMNIBOX_RADIUS)
+        .backgroundColor($r('app.color.omnibox_bg'))
+        .padding({ left: 12, right: 4 })
+        .layoutWeight(1)
+        .margin({ left: 4, right: 8 })
+      }
+      .width('100%')
+      .height(TOOLBAR_HEIGHT)
+      .padding({ left: 4, right: 4 })
+      .backgroundColor($r('app.color.page_bg'))
+      .alignItems(VerticalAlign.Center)
     }
     .width('100%')
-    .height(48)
-    .padding({ right: 5 })
-    .backgroundColor($r('app.color.page_bg'))
     .flexShrink(0)
   }
 }
@@ -194,18 +243,25 @@ struct TabItem {
   };
 
   build() {
-    // 用 Stack 让关闭按钮独立占据右侧热区，避免与页签选择点击嵌套、一次点击触发两个动作
-    Stack({ alignContent: Alignment.End }) {
+    Row() {
+      // 选择热区：favicon + 标题占满关闭按钮以外的空间
       Row() {
+        Image($r('app.media.ic_public_navigation'))
+          .width(OMNIBOX_ICON_SIZE)
+          .height(OMNIBOX_ICON_SIZE)
+          .opacity(this.active ? 0.9 : 0.5)
+          .flexShrink(0)
+
         Text(this.item.title ? this.item.title : '主页')
-          .fontSize(14)
+          .fontSize(12)
           .maxLines(1)
           .textOverflow({ overflow: TextOverflow.Ellipsis })
-          .textAlign(TextAlign.Center)
-          .width('100%')
-          .padding({ left: 8, right: CLOSE_BUTTON_SIZE + 4 })
+          .textAlign(TextAlign.Start)
+          .layoutWeight(1)
+          .margin({ left: 6, right: 2 })
+          .fontColor(this.active ? $r('app.color.text_primary') : $r('app.color.fg_secondary'))
       }
-      .width('100%')
+      .layoutWeight(1)
       .height('100%')
       .onClick((event: ClickEvent) => {
         this.onSelect(this.item.key);
@@ -217,20 +273,22 @@ struct TabItem {
       .backgroundColor($r('app.color.transparent'))
       .width(CLOSE_BUTTON_SIZE)
       .height(CLOSE_BUTTON_SIZE)
-      .borderRadius(5)
+      .borderRadius(CLOSE_BUTTON_SIZE / 2)
       .flexShrink(0)
-      .margin({ right: 2 })
       .accessibilityText('关闭页签')
       .onClick((event: ClickEvent) => {
         this.onClose(this.item.key);
       })
     }
     .width(TAB_WIDTH)
-    .height('100%')
-    .backgroundColor(this.active ? $r('app.color.tab_active_bg') : $r('app.color.tab_bar_bg'))
+    .height(TAB_HEIGHT)
+    .padding({ left: 8, right: 2 })
+    .borderRadius({ topLeft: 8, topRight: 8 })
+    .backgroundColor(this.active ? $r('app.color.tab_active_bg') : $r('app.color.transparent'))
   }
 }
 
+// 手机布局的页签条：多于一个页签时显示，支持横向滚动
 @Component
 export struct BrowserTabs {
   @Link browser: Browser;
@@ -257,14 +315,14 @@ export struct BrowserTabs {
               this.browser.deleteTab(key);
             }
           })
-          Divider().vertical(true).color($r('app.color.divider_color'))
         }, (item: WebKey) => item.timestamp.toString())
       }
+      .alignItems(VerticalAlign.Bottom)
       .height('100%')
     }
     .scrollable(ScrollDirection.Horizontal)
     .scrollBar(BarState.Off)
-    .height(TAB_BAR_HEIGHT)
+    .height(TAB_STRIP_HEIGHT)
     .width('100%')
     .flexShrink(0)
     .backgroundColor($r('app.color.tab_bar_bg'))
@@ -303,7 +361,7 @@ export struct WebTab {
             .multiWindowAccess(true)
             .zoomAccess(true)
             // 跟随系统深浅色：网页内容一并切换暗色渲染
-            .darkMode(WebDarkMode.Auto)
+            .darkMode(webview.WebDarkMode.Auto)
             .onWindowNew((event) => {
               Logger.info(TAG, `onWindowNew targetUrl: ` + event.targetUrl);
               if (event.targetUrl !== 'about:blank' && event.targetUrl !== '') {

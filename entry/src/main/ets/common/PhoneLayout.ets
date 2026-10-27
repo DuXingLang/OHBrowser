@@ -13,41 +13,54 @@
  * limitations under the License.
  */
 import { Browser } from '../model/Browser';
+import Logger from '../model/Logger';
 
 // 工具栏图标显示尺寸
 const TOOL_ICON_SIZE: number = 24
+// 地址栏内图标尺寸
+const OMNIBOX_ICON_SIZE: number = 16
 // 无障碍建议的最小点击热区（vp）
 const TOUCH_TARGET: number = 40
 // 工具栏高度
-const TOOLBAR_HEIGHT: number = 52
+const TOOLBAR_HEIGHT: number = 48
+// 地址栏高度与圆角（Chrome 药丸样式）
+const OMNIBOX_HEIGHT: number = 36
+const OMNIBOX_RADIUS: number = 18
+// 页签条高度（手机布局多页签时显示）
+const TAB_STRIP_HEIGHT: number = 40
 // 不可用按钮的透明度，用于表达“前进/后退/关闭”当前不可点击
-const DISABLED_OPACITY: number = 0.4
+const DISABLED_OPACITY: number = 0.38
 
 interface ButtonItem {
   imageSrc: Resource;
   id: number;
 }
 
-// 手机布局顶部区：地址栏 + 进度条
+// 手机布局顶部区：药丸地址栏（左 globe、右刷新）+ 进度条
 @Component
 export struct PhoneHeader {
   @Link browser: Browser;
-  @State hasDown: boolean = false;
   private addr: string = '';
 
   build() {
     Column() {
-      Flex({ justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Center }) {
+      Row() {
+        Image($r('app.media.ic_public_navigation'))
+          .width(OMNIBOX_ICON_SIZE)
+          .height(OMNIBOX_ICON_SIZE)
+          .opacity(0.55)
+          .flexShrink(0)
+
         TextInput({ placeholder: $r('app.string.Input_url'), text: this.browser.inputValue })
-          .placeholderFont({ size: 16, weight: 500 })
-          .fontSize(16)
-          .height(34)
-          .margin({ left: 6 })
+          .placeholderFont({ size: 14 })
+          .fontSize(14)
+          .height(32)
           .id('inputUrl')
           .layoutWeight(1)
+          .backgroundColor($r('app.color.transparent'))
+          .padding({ left: 6, right: 4 })
           .onChange((value: string) => {
             this.addr = value;
-            this.hasDown = this.addr.length > 0;
           })
           .enterKeyType(EnterKeyType.Go)
           .onSubmit(() => {
@@ -57,31 +70,26 @@ export struct PhoneHeader {
             }
             this.browser.loadUrl(this.addr);
             this.addr = '';
-            this.hasDown = false;
           })
 
         Button({ type: ButtonType.Normal, stateEffect: true }) {
-          Image($r('app.media.submit'))
-            .width(TOOL_ICON_SIZE)
-            .height(TOOL_ICON_SIZE)
-            .opacity(this.hasDown ? 1 : DISABLED_OPACITY)
+          Image($r('app.media.ic_public_refresh')).width(OMNIBOX_ICON_SIZE).height(OMNIBOX_ICON_SIZE)
         }
+        .width(32)
+        .height(32)
+        .borderRadius(16)
         .backgroundColor($r('app.color.transparent'))
-        .width(TOUCH_TARGET)
-        .height(TOUCH_TARGET)
-        .margin({ left: 8, right: 8 })
-        .enabled(this.hasDown)
+        .flexShrink(0)
+        .accessibilityText('刷新网页')
         .onClick(() => {
-          if (this.addr === '') {
-            return;
-          }
-          this.browser.loadUrl(this.addr);
-          this.addr = '';
-          this.hasDown = false;
+          this.browser.Refresh();
         })
       }
       .width('100%')
-      .padding({ top: 4, left: 6, right: 6 })
+      .height(OMNIBOX_HEIGHT)
+      .borderRadius(OMNIBOX_RADIUS)
+      .backgroundColor($r('app.color.omnibox_bg'))
+      .padding({ left: 12, right: 4 })
 
       // 加载进度条：仅加载中显示
       Progress({ value: this.browser.progress, total: 100 })
@@ -90,12 +98,14 @@ export struct PhoneHeader {
         .margin({ top: 2 })
         .visibility(this.browser.hideProgress ? Visibility.Hidden : Visibility.Visible)
     }
+    .width('100%')
+    .padding({ top: 6, bottom: 6, left: 8, right: 8 })
     .backgroundColor($r('app.color.page_bg'))
     .flexShrink(0)
   }
 }
 
-// 手机布局底部工具栏：后退/新建/关闭/刷新/主页/前进
+// 手机布局底部工具栏：后退/前进/主页/新建/关闭
 @Component
 export struct PhoneToolBar {
   @Link browser: Browser;
@@ -104,19 +114,16 @@ export struct PhoneToolBar {
       imageSrc: $r('app.media.ic_public_back'), id: 3
     },
     {
-      imageSrc: $r('app.media.ic_public_add'), id: 1
-    },
-    {
-      imageSrc: $r('app.media.ic_public_cancel_filled'), id: 2
-    },
-    {
-      imageSrc: $r('app.media.ic_public_refresh'), id: 0
+      imageSrc: $r('app.media.ic_public_advance'), id: 6
     },
     {
       imageSrc: $r('app.media.ic_public_home'), id: 5
     },
     {
-      imageSrc: $r('app.media.ic_public_advance'), id: 6
+      imageSrc: $r('app.media.ic_public_add'), id: 1
+    },
+    {
+      imageSrc: $r('app.media.ic_public_cancel_filled'), id: 2
     }
   ];
 
@@ -138,7 +145,6 @@ export struct PhoneToolBar {
     Column() {
       Divider().color($r('app.color.divider_light'))
       Row() {
-        // 6 个按钮用 layoutWeight 均分，避免固定百分比（6×20%）超出容器宽度
         ForEach(this.toolPoneArray, (item: ButtonItem) => {
           Button({ type: ButtonType.Normal, stateEffect: true }) {
             Image(item.imageSrc)
@@ -150,11 +156,9 @@ export struct PhoneToolBar {
           .backgroundColor($r('app.color.transparent'))
           .layoutWeight(1)
           .height('100%')
+          .accessibilityText(this.toolAccessibility(item.id))
           .onClick(() => {
             switch (item.id) {
-              case 0:
-                this.browser.Refresh();
-                break;
               case 1:
                 this.browser.addTab();
                 break;
@@ -165,8 +169,13 @@ export struct PhoneToolBar {
                 this.browser.Back();
                 break;
               case 5:
-                // 主页：空保护后加载内置首页
-                this.browser.webControllerArray[this.browser.tabArrayIndex]?.controller.loadUrl($rawfile('phone.html'));
+                // 主页：空保护后加载内置首页；Web 未挂载时 loadUrl 抛 17100001，兜底忽略
+                try {
+                  this.browser.webControllerArray[this.browser.tabArrayIndex]?.controller
+                    .loadUrl($rawfile('phone.html'));
+                } catch (error) {
+                  Logger.error(TAG, `loadHome failed: ${JSON.stringify(error)}`);
+                }
                 break;
               case 6:
                 this.browser.Forward();
@@ -184,5 +193,23 @@ export struct PhoneToolBar {
     .width('100%')
     .backgroundColor($r('app.color.page_bg'))
     .flexShrink(0)
+  }
+
+  // 无障碍文案：说明按钮用途
+  private toolAccessibility(id: number): string {
+    switch (id) {
+      case 3:
+        return '后退';
+      case 6:
+        return '前进';
+      case 5:
+        return '主页';
+      case 1:
+        return '新建页签';
+      case 2:
+        return '关闭页签';
+      default:
+        return '';
+    }
   }
 }

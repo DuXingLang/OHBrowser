@@ -34,3 +34,11 @@
 
 ## 已知限制
 - 本环境无 DevEco Studio/hvigor 构建链，未执行 hvigorw 真机编译验证；已通过 Node 单测 + 三项静态检查 + 人工审查替代。
+
+### 第三轮：崩溃修复 + Chrome 风格顶栏 + package.json 移除
+16. 修复 17100001 崩溃：addTab/deleteTab 后 updateHistoryState 在 Web 未挂载时抛异常。updateHistoryState/Back/Forward/两处主页 loadUrl 全部 try/catch 兜底。
+17. TabletTitle 重做为「页签条 + 药丸地址栏工具栏」的 Chrome 风格；PhoneHeader/PhoneToolBar 同步药丸地址栏与 5 键均分布局；索引页移除重复页签条。
+18. base/dark color.json 改用 Chrome 调色板，新增 omnibox_bg/text_primary/fg_secondary。
+19. 删除根目录 package.json（与 oh-package.json5 重复导致无法编译打包），Node 测试改直接执行；README/HANDOFF 验证命令同步。
+20. phone.html / pad.html 站点数组首位新增百度快捷入口（baidu.com，使用已有 baidu.png）。
+21. 验证：node --test 7 pass；check-json5 8 文件通过；check-resources 46 处引用命中；check-structure 15 导入/5 ForEach/4 HTML 通过。

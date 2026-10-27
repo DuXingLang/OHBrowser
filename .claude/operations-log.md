@@ -54,3 +54,16 @@
 29. 新增 `entry/src/main/ets/common/MoreMenu.ets`（105 行）：`bindMenu(MenuElement[])` 8 项入口（新建页签/放大/缩小/缩放重置/桌面版/深色/缓存/清除数据），文案随 `settings` 变化。
 30. 验证：node --test 7 pass；check-json5 8 通过；check-resources 16 文件 48 处；check-structure 16 文件 18 导入/5 ForEach/6 TAG/3 @ObjectLink 组件 5 处调用/4 HTML。
 31. 文档：README.md 补扩展能力小节与文件地图，HANDOFF.md 增第四轮说明与 5 条新踩坑（TAG/@ObjectLink/Browser 非 Observed/下载需 start/zoom 相对倍数），新增 `.claude/context-summary-webview-api.md` 与 `.claude/verification-report-webview-api.md`（自评 93 分）。
+
+### 第五轮：页面内查找 + 书签持久化
+32. 文档核对：`.git/dsh-docs/webview.md` 确认 API 12 只有 `searchAllAsync`(2508)/`searchNext`(2623)/`clearMatches`(2577)，`web-attr.md` 确认 `onSearchResultReceive`(5473) 与 `OnSearchResultReceiveEvent`(10160)；`preferences.md` 确认 `getPreferencesSync`(343)/`putSync`(1515)/`getSync`(1242)/`deleteSync`(1777)/`flush`(1853)，**没有 flushSync（14+）**。放弃网上 14+ 示例，避免编译不过。
+33. `Browser.ets`：`WebSettings` 增 `findVisible/findKeyword/findIndex/findTotal`；新增 `openFindBar/closeFindBar/searchInPage(keyword)/searchNext(forward)/updateFindResult(activeMatchOrdinal, numberOfMatches)/resetFindResult()/clearMatches()`，全部 controller 调用 try/catch（未挂载时 17100001）。
+34. `FindBar.ets`（新增）：48vp 横条，输入即搜、Enter 下一个、计数 `${findIndex+1}/${findTotal}`、无匹配显示 `0/0` 并置灰前后按钮；关闭走 `closeFindBar()` 清高亮。`TitleBar.ets` 的 `onPageBegin` 增 `resetFindResult()`，WebTab 增 `onSearchResultReceive`。`MoreMenu.ets` 增「在页面中查找」。
+35. `BookmarkList.ts`（新增，纯函数）：`parseBookmarks`/`stringifyBookmarks`/`normalizeTitle`，不依赖 ArkUI 与系统能力；脏数据、缺字段、非数组一律返回空列表而不抛错。
+36. `BookmarkStore.ets`（新增，@Observed）：`items`/`visible`，`init(context)` 用 `preferences.getPreferencesSync(context, { name: 'browser_store' })` 读取 Key `bookmarks`，`add/remove/has` 后 `putSync` + `flush()`（失败只记日志，内存书签仍可用）。
+37. `BookmarkPanel.ets`（新增）：标题行（收藏当前页/收起）+ 空态提示 + `List`（`constraintSize({ maxHeight: 320 })` 内部滚动），行内标题/网址省略号，删除按钮独立热区，点击整行 `loadUrl` 并收起。
+38. `Browser.ets` 增书签入口：`bookmarkStore` 属性、`initBookmarks(context)`、`openBookmarks()`（先 `closeFindBar()`）、`closeBookmarks()`、`addCurrentPageBookmark()`（`getUrl()` 非 http 开头提示「当前页面不支持收藏」，重复收藏提示「已更新该书签」）。
+39. `Index.ets`：`import { BookmarkPanel }`；`loadBookmarks()` 在 `aboutToAppear`/`onDeviceChange` 调 `initBookmarks(getContext(this))`（Context 只在页面层取一次）；渲染 `if (!webFullScreen && bookmarkStore.visible) BookmarkPanel(...)`。`MoreMenu.ets` 增「收藏当前页」「书签」两项。
+40. 单测：新增 `tests/bookmark.test.mjs` 7 用例（追加置顶、同 URL 去重、超上限丢最旧、删除、标题兜底域名、脏数据丢弃、序列化往返），`node --test` 合计 14 pass。
+41. 验证：`node --test` 14 pass / 0 fail；`check-json5` 8 个通过；`check-resources` 20 个源文件 70 处引用；`check-structure` 20 文件 28 导入 / 6 ForEach / 7 TAG / 5 个 @ObjectLink 组件 7 处调用 / 4 HTML。
+42. 文档：README.md 补使用说明 11–12 条、文件地图 4 个新文件、具体实现两组小节；HANDOFF.md 增第五轮小节与踩坑 24–27、验证基线更新；新增 `.claude/context-summary-find-bookmark.md` 与 `.claude/verification-report-find-bookmark.md`（自评 94 分）。

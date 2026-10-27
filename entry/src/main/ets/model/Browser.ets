@@ -16,7 +16,10 @@ import Logger from './Logger'
 import { promptAction } from '@kit.ArkUI';
 import webview from '@ohos.web.webview';
 import { image } from '@kit.ImageKit';
+import common from '@ohos.app.ability.common';
 import { formatUrl } from './UrlFormatter';
+import { Bookmark, normalizeTitle } from './BookmarkList';
+import { BookmarkStore } from './BookmarkStore';
 
 export { formatUrl };
 
@@ -70,6 +73,14 @@ export class WebSettings {
   zoomScale: number = 1
   // 是否处于网页全屏（网页视频等），true 时页面隐藏标题栏与工具栏
   isFullScreen: boolean = false
+  // 是否展开页面内查找栏
+  findVisible: boolean = false
+  // 当前查找关键字，空串表示未在查找
+  findKeyword: string = ''
+  // 当前匹配项序号（从 0 开始，展示时需 +1）
+  findIndex: number = 0
+  // 匹配项总数，0 表示无匹配
+  findTotal: number = 0
 }
 
 const TAG: string = '[browser]'
@@ -403,5 +414,117 @@ export class Browser {
       return;
     }
     this.webArray[key].favicon = favicon;
+  }
+
+  // 展开页面内查找栏（不立即查找，等用户输入关键字）
+  openFindBar() {
+    this.settings.findVisible = true;
+    this.settings.findKeyword = '';
+    this.settings.findIndex = 0;
+    this.settings.findTotal = 0;
+  }
+
+  // 收起查找栏并清除网页中的高亮
+  closeFindBar() {
+    this.settings.findVisible = false;
+    this.settings.findKeyword = '';
+    this.settings.findIndex = 0;
+    this.settings.findTotal = 0;
+    this.clearMatches();
+  }
+
+  // 关键字变化时重新查找；空关键字只清除已有高亮
+  searchInPage(keyword: string) {
+    this.settings.findKeyword = keyword;
+    if (keyword.length === 0) {
+      this.settings.findIndex = 0;
+      this.settings.findTotal = 0;
+      this.clearMatches();
+      return;
+    }
+    const controller = this.getController();
+    try {
+      // 结果通过 Web 组件的 onSearchResultReceive 异步返回
+      controller?.searchAllAsync(keyword);
+    } catch (error) {
+      Logger.error(TAG, `searchAllAsync failed: ${JSON.stringify(error)}`);
+    }
+  }
+
+  // 跳转到下一个/上一个匹配项
+  searchNext(forward: boolean) {
+    if (this.settings.findTotal <= 0) {
+      return;
+    }
+    const controller = this.getController();
+    try {
+      controller?.searchNext(forward);
+    } catch (error) {
+      Logger.error(TAG, `searchNext failed: ${JSON.stringify(error)}`);
+    }
+  }
+
+  // onSearchResultReceive 回调：序号从 0 开始，只保留最后一次完整统计结果
+  updateFindResult(activeMatchOrdinal: number, numberOfMatches: number) {
+    this.settings.findIndex = activeMatchOrdinal;
+    this.settings.findTotal = numberOfMatches;
+  }
+
+  // 页面跳转后旧页面的匹配结果失效，重置计数（保持查找栏展开状态）
+  resetFindResult() {
+    this.settings.findIndex = 0;
+    this.settings.findTotal = 0;
+  }
+
+  private clearMatches() {
+    const controller = this.getController();
+    try {
+      controller?.clearMatches();
+    } catch (error) {
+      Logger.error(TAG, `clearMatches failed: ${JSON.stringify(error)}`);
+    }
+  }
+
+  // 书签状态与持久化（preferences），UI 通过 @ObjectLink 绑定
+  bookmarkStore: BookmarkStore = new BookmarkStore()
+
+  // 首次进入页面时加载已保存的书签
+  initBookmarks(context: common.Context) {
+    this.bookmarkStore.init(context);
+  }
+
+  // 展开/收起书签面板；两者互斥，展开书签时顺带收起查找栏
+  openBookmarks() {
+    this.closeFindBar();
+    this.bookmarkStore.visible = true;
+  }
+
+  closeBookmarks() {
+    this.bookmarkStore.visible = false;
+  }
+
+  // 收藏当前页：地址为空或非网页地址（本地首页、about:blank）时拒绝并提示
+  addCurrentPageBookmark() {
+    const controller = this.getController();
+    let url: string = '';
+    let title: string = '';
+    try {
+      url = controller?.getUrl() ?? '';
+      title = controller?.getTitle() ?? '';
+    } catch (error) {
+      Logger.error(TAG, `getUrl/getTitle failed: ${JSON.stringify(error)}`);
+    }
+    if (!url.startsWith('http')) {
+      promptAction.showToast({ message: '当前页面不支持收藏' });
+      return;
+    }
+    const bookmark: Bookmark = {
+      title: normalizeTitle(title, url),
+      url: url,
+      time: new Date().getTime()
+    };
+    const exists: boolean = this.bookmarkStore.has(url);
+    this.bookmarkStore.add(bookmark);
+    promptAction.showToast({ message: exists ? '已更新该书签' : '已添加到书签' });
   }
 }

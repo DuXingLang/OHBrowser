@@ -21,12 +21,13 @@
 - 第一轮（`164919b`，25 文件 +733/−315）：5.x 迁移、核心重写、深浅色资源、HTML 语法修复、首页布局、formatUrl 单测。
 - 第二轮（`90d35e7`）：补齐**静态测试层**，据此找出并修复 10 项缺陷；布局判定改为窗口宽度断点；首页 HTML 改自绘深浅色 + 自适应栅格；文档三件套同步。
 - 第三轮（本轮）：修复新增页签崩溃（17100001）、顶栏按 Chrome 风格重做（页签条 + 药丸地址栏 + 圆形按钮）、删除与 oh-package.json5 冲突的根目录 package.json、首页新增百度快捷入口。
-- 第四轮（当前工作区未提交）：按 OpenHarmony 5.0.3 官方 ArkWeb 文档补齐能力（缩放 / 桌面版 UA / 强制深色 / 缓存策略 / 清除浏览数据 / 下载 / 页签图标 / 网页全屏 / HTTP 与渲染异常提示），顺带修复 `PhoneLayout.ets` 使用未声明 `TAG` 的编译级缺陷，并给静态检查器加了 TAG 与 @ObjectLink 传参两类规则。
+- 第四轮（`45cff8e`，已推送）：按 OpenHarmony 5.0.3 官方 ArkWeb 文档补齐能力（缩放 / 桌面版 UA / 强制深色 / 缓存策略 / 清除浏览数据 / 下载 / 页签图标 / 网页全屏 / HTTP 与渲染异常提示），顺带修复 `PhoneLayout.ets` 使用未声明 `TAG` 的编译级缺陷，并给静态检查器加了 TAG 与 @ObjectLink 传参两类规则。
+- 第五轮（当前工作区未提交）：页面内查找（`searchAllAsync`/`searchNext`/`clearMatches` + `onSearchResultReceive`）与书签（纯函数序列化 + preferences 持久化 + 面板），补 7 个书签单测。
 
 ## 三、验证怎么跑（本机可跑，无需 SDK）
 
 ```bash
-node --test                     # 单元测试：7 用例
+node --test                     # 单元测试：14 用例（formatUrl 7 + 书签 7）
 node tests/check-json5.mjs      # 静态检查：json5 配置可解析
 node tests/check-resources.mjs  # 静态检查：资源引用均已定义
 node tests/check-structure.mjs  # 静态检查：导入符号 / ForEach / rawfile HTML
@@ -35,10 +36,10 @@ node tests/check-structure.mjs  # 静态检查：导入符号 / ForEach / rawfil
 当前基线结果（改动后必须仍然全绿）：
 
 ```
-node --test                    → 7 pass / 0 fail
+node --test                    → 14 pass / 0 fail
 node tests/check-json5.mjs     → 8 个 json5 配置全部解析通过
-node tests/check-resources.mjs → 16 个源文件 48 处源码资源引用、4 个配置文件 16 处配置引用全部命中
-node tests/check-structure.mjs → 16 个源文件 18 处相对导入、5 处 ForEach、6 处 TAG 声明、3 个 @ObjectLink 组件 5 处调用、4 个 HTML 全部符合约束
+node tests/check-resources.mjs → 20 个源文件 70 处源码资源引用、4 个配置文件 16 处配置引用全部命中
+node tests/check-structure.mjs → 20 个源文件 28 处相对导入、6 处 ForEach、7 处 TAG 声明、5 个 @ObjectLink 组件 7 处调用、4 个 HTML 全部符合约束
 ```
 
 ## 四、本轮关键改动（含“为什么”）
@@ -88,11 +89,27 @@ node tests/check-structure.mjs → 16 个源文件 18 处相对导入、5 处 Fo
 - **`PhoneLayout.ets` 编译级缺陷**：`Logger.error(TAG, ...)` 用了从未声明的 `TAG`（运行到该行只会拿到 undefined，编译期不报错）。已补 `const TAG: string = '[PhoneLayout]';`，并在 `check-structure.mjs` 加了「用了 TAG 必须自己声明」的规则。
 - **菜单组件 `MoreMenu.ets`**：`bindMenu(MenuElement[])`，手机/平板工具栏共用；手机端用 `Column().layoutWeight(1)` 包一层，保证 6 个入口等分热区。
 
+### 第五轮（页面内查找 + 书签持久化）
+
+文档仍然只从 gitee `OpenHarmony-5.0.3-Release` 分支的 Markdown 核对（本地副本 `.git/dsh-docs/webview.md`、`web-attr.md`）：
+
+- **5.0.3 的查找接口只有三个**：`searchAllAsync(searchString: string): void`（webview.md:2508）、`searchNext(forward: boolean): void`（webview.md:2623）、`clearMatches(): void`（webview.md:2577）。**没有 `findAllAsync` / `findNext`**，网上大量示例写的是 14+ 的新名字，照抄会编译不过。
+- **查找条 `FindBar.ets`**：与标题栏同级的一条 48vp 横条，`TextInput` 输入即搜（`onChange` → `searchInPage`），`Enter`/「下一个」→ `searchNext(true)`，「上一个」→ `searchNext(false)`，关闭 → `closeFindBar()`（内部 `clearMatches()` 清高亮）。
+- **匹配数从事件来**：`onSearchResultReceive((event) => ...)` 给出 `activeMatchOrdinal`（**从 0 开始**）与 `numberOfMatches`，界面显示 `${findIndex + 1}/${findTotal}`，无匹配显示 `0/0` 并把上一个/下一个置灰。
+- **跳转后旧结果失效**：`onPageBegin` 调 `resetFindResult()` 只清计数、不收起查找条（用户往往要在新页继续找）。
+- **书签纯函数抽离**：`model/BookmarkList.ts` 的 `addBookmark`/`removeBookmark`/`normalizeTitle`/`parseBookmarks`/`stringifyBookmarks` 不 import 任何 ArkUI/系统能力，因此能被 `tests/bookmark.test.mjs` 用 `node --test` 直接覆盖（7 用例：去重、上限截断、删除、标题兜底、脏数据、序列化往返）。
+- **持久化**：`preferences.getPreferencesSync(context, { name: 'browser_store' })` + `putSync`/`getSync`（Key `bookmarks`），写完 `flush()` 异步落盘。**API 12 没有 `flushSync`**（是 14+），只能 `flush()`。
+- **状态放 `@Observed BookmarkStore`**：`items`、`visible` 都在这个对象上，`BookmarkPanel` 用 `@ObjectLink` 绑定 → 收藏/删除后面板精确刷新。`Browser` 不是 @Observed，所以 `bookmarkStore` 只作为普通属性持有。
+- **收藏限制**：`controller.getUrl()` 不是 `http` 开头（本地 `$rawfile` 首页、`about:blank`）时提示「当前页面不支持收藏」，避免把 `file://` 路径写进书签。
+- **面板与查找条同级**：都在 `WebTab` 之上、只在 `!webFullScreen` 时渲染，占用固定高度内部滚动，**不改动 Web 组件在组件树中的位置**，所以展开/收起都不会让网页重载。
+- **Context 只在 Index 拿一次**：`Index.aboutToAppear()` / `onDeviceChange()` 里调 `browser.initBookmarks(getContext(this))`；UI 组件不各自持有 Context，避免生命周期不一致。
+
 ## 五、未闭环（环境限制，非代码问题）
 
 - 本机无 DevEco Studio / OpenHarmony SDK / hvigorw，**未做编译与真机运行验证**。换有 DevEco 5.0+ 的环境执行 `hvigorw assembleHap` 复核 ArkTS 严格模式告警。
 - 真机手测清单：手机竖屏/横屏各走一遍新增页签→切换→关闭→旋转；平板上限 10 页签；深色模式下首页与网页配色；无历史时按返回键应退出应用。
 - 第四轮待真机确认项：更多菜单 8 个入口逐项生效（尤其切换缓存/深色后当前页自动刷新）、页面内下载能落盘到 `files/Download/`、视频网站全屏进出、页签图标刷新、断网时的错误提示文案。
+- 第五轮待真机确认项：查找条对中文关键字的匹配计数、跨页面跳转后计数是否归零、书签面板在小屏（<600vp）与横屏下的高度与滚动、重启应用后书签是否仍在（`flush()` 是否真正落盘）、同一网址重复收藏是否只剩一条。
 
 ## 六、踩过的坑（绝对不要再踩）
 
@@ -119,6 +136,10 @@ node tests/check-structure.mjs → 16 个源文件 18 处相对导入、5 处 Fo
 21. **不要给 `Browser` 直接加会驱动 UI 的开关**：`Browser` 不是 @Observed，加了也不会刷新。要联动的状态放 `WebSettings`（@Observed），用 @ObjectLink 绑。
 22. **下载不调用 `item.start()` 就永远 PENDING**：`WebDownloadDelegate` 只在 `onBeforeDownload` 里主动指定保存路径才会真正开始；委托对象必须由 Browser 持有引用，否则会被回收导致回调丢失。
 23. **`zoom(factor)` 是相对倍数不是绝对值**：直接传 1.5 会在当前比例上再乘 1.5，必须换算成 `目标 / 当前`。
+24. **别信网上 14+ 的 API 名字**：`findAllAsync`/`findNext`/`flushSync` 在 API 12 都不存在，对应的是 `searchAllAsync`/`searchNext`/`flush`。改任何 controller/首选项调用前，先在 `.git/dsh-docs/` 里 grep 签名。
+25. **`activeMatchOrdinal` 从 0 开始**：直接显示会得到「0/5」，必须 +1。
+26. **书签面板别插在 Web 上面覆盖**：用兄弟节点（固定高度、内部 List 滚动）而不是 overlay，避免盖住网页且不触发重载。
+27. **`constraintSize({ maxHeight })` 比写死 height 好**：书签少时不留大片空白，多时到上限才滚。
 
 ## 七、关键文件地图
 
@@ -127,9 +148,13 @@ entry/src/main/ets/
 ├── model/Browser.ets          # 页签/控制器/标题/canBack·canForward/formatUrl 转出
 ├── model/UrlFormatter.ts      # 纯函数：地址栏输入归一化（有单测）
 ├── model/Logger.ts            # hilog 封装（已修变参）
-├── common/TitleBar.ets        # 平板：TabletTitle / TabItem / BrowserTabs / WebTab（含下载、favicon、全屏）
+├── model/BookmarkList.ts      # 纯函数：书签序列化/解析/标题兜底（有单测）
+├── model/BookmarkStore.ets    # @Observed 书签状态 + preferences 持久化
+├── common/TitleBar.ets        # 平板：TabletTitle / TabItem / BrowserTabs / WebTab（含下载、favicon、全屏、查找回调）
 ├── common/PhoneLayout.ets     # 手机：PhoneHeader / PhoneToolBar（含更多菜单入口）
-├── common/MoreMenu.ets        # 「更多」菜单：缩放/桌面版 UA/深色/缓存/清除数据
+├── common/MoreMenu.ets        # 「更多」菜单：缩放/桌面版 UA/深色/缓存/清除数据/查找/书签
+├── common/FindBar.ets         # 页面内查找条（输入/上一个/下一个/计数/关闭）
+├── common/BookmarkPanel.ets   # 书签面板（收藏当前页/跳转/删除）
 ├── pages/Index.ets            # 入口：宽度断点/形态判定/布局分支/全屏隐藏/onBackPress
 └── Application/AbilityStage.ts、MainAbility/MainAbility.ts   # 未改动
 entry/src/main/resources/
@@ -138,6 +163,7 @@ entry/src/main/resources/
 └── rawfile/test.html          # 演示页（已修语法）
 tests/
 ├── formatUrl.test.mjs         # 7 用例（node --test）
+├── bookmark.test.mjs          # 7 用例：书签序列化/解析
 ├── check-json5.mjs            # json5 解析
 ├── check-resources.mjs        # 资源引用一致性
 └── check-structure.mjs        # 导入符号 / ForEach / TAG 声明 / @ObjectLink 传参 / HTML 结构
@@ -146,6 +172,8 @@ tests/
 ├── verification-report-browser-round2.md   # 自评 92 分
 ├── verification-report-webview-api.md      # 第四轮（官方 API 补功能，自评 93 分）
 ├── context-summary-webview-api.md          # 第四轮上下文摘要
+├── context-summary-find-bookmark.md        # 第五轮（查找 + 书签）
+├── verification-report-find-bookmark.md    # 第五轮，自评 94 分
 ├── context-summary-browser-optimization.md # 第一轮
 ├── verification-report-browser-optimization.md
 └── operations-log.md          # 各轮流水

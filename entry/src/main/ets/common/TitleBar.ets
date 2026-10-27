@@ -407,6 +407,8 @@ export struct WebTab {
                 this.browser.inputValue = '';
               }
               this.browser.loadingStatus = LoadingStatus.LOADING;
+              // 新页面开始的瞬间旧页面的匹配结果已失效，避免查找栏显示上一页的计数
+              this.browser.resetFindResult();
             })
             .onPageEnd((event) => {
               Logger.info(TAG, `onPageEnd= ${JSON.stringify(event)}`)
@@ -473,6 +475,12 @@ export struct WebTab {
             .onFullScreenExit(() => {
               this.browser.exitWebFullScreen();
               this.onFullScreenChange(false);
+            })
+            .onSearchResultReceive((event) => {
+              // 页面内查找结果：activeMatchOrdinal 从 0 开始，随 match 递增
+              if (event !== undefined) {
+                this.browser.updateFindResult(event.activeMatchOrdinal, event.numberOfMatches);
+              }
             })
         }
       }, (item: WebKey) => item.timestamp.toString())

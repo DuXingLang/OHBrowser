@@ -18,6 +18,8 @@ import { Browser } from '../model/Browser';
 import Logger from '../model/Logger';
 import { PhoneHeader, PhoneToolBar } from '../common/PhoneLayout';
 import { TabletTitle, BrowserTabs, WebTab } from '../common/TitleBar';
+import { FindBar } from '../common/FindBar';
+import { BookmarkPanel } from '../common/BookmarkPanel';
 
 const TAG: string = '[browser.Index]';
 // 布局断点：窗口宽度小于 600vp 用手机单页签布局，否则用多页签布局
@@ -45,6 +47,16 @@ struct Index {
   onDeviceChange() {
     Logger.info(TAG, `onDeviceChange`);
     this.browser = new Browser();
+    this.loadBookmarks();
+  }
+
+  // 书签需要 Context 才能访问首选项，集中在这里初始化，避免 UI 组件各自持有 Context
+  loadBookmarks() {
+    try {
+      this.browser.initBookmarks(getContext(this));
+    } catch (e) {
+      Logger.error(TAG, `initBookmarks failed: ${JSON.stringify(e)}`);
+    }
   }
 
   aboutToAppear() {
@@ -75,6 +87,7 @@ struct Index {
       this.homeIsPhone = false;
     }
     Logger.info(TAG, `homeIsPhone = ${this.homeIsPhone}`);
+    this.loadBookmarks();
   }
 
   aboutToDisappear() {
@@ -97,6 +110,14 @@ struct Index {
           // 页签条已内置于 TabletTitle（页签条 + 工具栏一体），此处不再重复渲染
           Divider().color($r('app.color.divider_color')).width('100%').flexShrink(0)
         }
+      }
+      // 页面内查找栏：展开时占用一条独立横条，与标题栏/工具栏互不遮挡
+      if (!this.webFullScreen && this.browser.settings.findVisible) {
+        FindBar({ browser: $browser, settings: this.browser.settings })
+      }
+      // 书签面板与查找栏同级，展开时同样是独立横条
+      if (!this.webFullScreen && this.browser.bookmarkStore.visible) {
+        BookmarkPanel({ browser: $browser, bookmarks: this.browser.bookmarkStore })
       }
       // WebTab 常驻组件树：横竖屏切换仅切换标题栏/工具栏，Web 不销毁，浏览状态不丢失
       WebTab({

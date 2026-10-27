@@ -78,6 +78,24 @@ export struct MoreMenuButton {
         }
       },
       {
+        value: '在页面中查找',
+        action: () => {
+          this.browser.openFindBar();
+        }
+      },
+      {
+        value: '收藏当前页',
+        action: () => {
+          this.browser.addCurrentPageBookmark();
+        }
+      },
+      {
+        value: '书签',
+        action: () => {
+          this.browser.openBookmarks();
+        }
+      },
+      {
         value: '清除浏览数据',
         action: () => {
           this.browser.clearBrowsingData();

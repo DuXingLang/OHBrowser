@@ -20,6 +20,8 @@ const TOOL_ICON_SIZE: number = 24
 const TOUCH_TARGET: number = 40
 // 工具栏高度
 const TOOLBAR_HEIGHT: number = 52
+// 不可用按钮的透明度，用于表达“前进/后退/关闭”当前不可点击
+const DISABLED_OPACITY: number = 0.4
 
 interface ButtonItem {
   imageSrc: Resource;
@@ -47,28 +49,35 @@ export struct PhoneHeader {
             this.addr = value;
             this.hasDown = this.addr.length > 0;
           })
+          .enterKeyType(EnterKeyType.Go)
           .onSubmit(() => {
             // 统一走 Browser.loadUrl，由 formatUrl 做协议补全与搜索词归一化
+            if (this.addr.length === 0) {
+              return;
+            }
             this.browser.loadUrl(this.addr);
             this.addr = '';
+            this.hasDown = false;
           })
 
         Button({ type: ButtonType.Normal, stateEffect: true }) {
           Image($r('app.media.submit'))
             .width(TOOL_ICON_SIZE)
             .height(TOOL_ICON_SIZE)
-            .opacity(this.hasDown ? 1 : 0.4)
+            .opacity(this.hasDown ? 1 : DISABLED_OPACITY)
         }
         .backgroundColor($r('app.color.transparent'))
         .width(TOUCH_TARGET)
         .height(TOUCH_TARGET)
         .margin({ left: 8, right: 8 })
+        .enabled(this.hasDown)
         .onClick(() => {
           if (this.addr === '') {
             return;
           }
           this.browser.loadUrl(this.addr);
           this.addr = '';
+          this.hasDown = false;
         })
       }
       .width('100%')
@@ -86,45 +95,60 @@ export struct PhoneHeader {
   }
 }
 
-// 手机布局底部工具栏：主页/新标签/关闭/后退/刷新/前进
+// 手机布局底部工具栏：后退/新建/关闭/刷新/主页/前进
 @Component
 export struct PhoneToolBar {
   @Link browser: Browser;
-  @State arrayIndex: number = 0;
   private toolPoneArray: ButtonItem[] = [
     {
-      imageSrc: $r('app.media.aa'), id: 3
+      imageSrc: $r('app.media.ic_public_back'), id: 3
     },
     {
-      imageSrc: $r('app.media.add'), id: 1
+      imageSrc: $r('app.media.ic_public_add'), id: 1
     },
     {
-      imageSrc: $r('app.media.delete'), id: 2
+      imageSrc: $r('app.media.ic_public_cancel_filled'), id: 2
     },
     {
-      imageSrc: $r('app.media.fresh'), id: 0
+      imageSrc: $r('app.media.ic_public_refresh'), id: 0
     },
     {
-      imageSrc: $r('app.media.home'), id: 5
+      imageSrc: $r('app.media.ic_public_home'), id: 5
     },
     {
-      imageSrc: $r('app.media.bb'), id: 6
+      imageSrc: $r('app.media.ic_public_advance'), id: 6
     }
   ];
 
+  // 各按钮的可用态：不可用时降低透明度，避免用户反复点击无响应
+  private toolOpacity(id: number): number {
+    switch (id) {
+      case 3:
+        return this.browser.canBack ? 1 : DISABLED_OPACITY;
+      case 6:
+        return this.browser.canForward ? 1 : DISABLED_OPACITY;
+      case 2:
+        return this.browser.webArray.length > 1 ? 1 : DISABLED_OPACITY;
+      default:
+        return 1;
+    }
+  }
+
   build() {
-    Row() {
-      ForEach(this.toolPoneArray, (item: ButtonItem, index: number) => {
-        Column() {
-          Divider().color($r('app.color.divider_light'))
+    Column() {
+      Divider().color($r('app.color.divider_light'))
+      Row() {
+        // 6 个按钮用 layoutWeight 均分，避免固定百分比（6×20%）超出容器宽度
+        ForEach(this.toolPoneArray, (item: ButtonItem) => {
           Button({ type: ButtonType.Normal, stateEffect: true }) {
             Image(item.imageSrc)
               .width(TOOL_ICON_SIZE)
               .height(TOOL_ICON_SIZE)
+              .opacity(this.toolOpacity(item.id))
           }
-          .id(item.id)
-          .backgroundColor(item.id !== this.arrayIndex ? $r('app.color.transparent') : $r('app.color.press_bg'))
-          .width('20%')
+          .id(`toolButton${item.id}`)
+          .backgroundColor($r('app.color.transparent'))
+          .layoutWeight(1)
           .height('100%')
           .onClick(() => {
             switch (item.id) {
@@ -136,7 +160,6 @@ export struct PhoneToolBar {
                 break;
               case 2:
                 this.browser.deleteTab(this.browser.getTabArrayIndex());
-                this.arrayIndex = 0;
                 break;
               case 3:
                 this.browser.Back();
@@ -152,10 +175,10 @@ export struct PhoneToolBar {
                 break;
             }
           })
-        }
-        .width('20%')
-        .height('100%')
-      }, (item: ButtonItem) => item.id.toString())
+        }, (item: ButtonItem) => item.id.toString())
+      }
+      .width('100%')
+      .layoutWeight(1)
     }
     .height(TOOLBAR_HEIGHT)
     .width('100%')

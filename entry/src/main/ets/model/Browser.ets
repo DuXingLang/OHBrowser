@@ -32,10 +32,14 @@ export class WebObject {
 export class WebKey {
   key: number;
   timestamp: number;
+  // 页签标题：onPageEnd 时更新为实际页面标题；空标题回退为“主页”。
+  // 放在 @Observed 对象上，页签条通过 @ObjectLink 绑定，标题变化可精确触发该页签刷新。
+  title: string;
 
-  constructor(key: number, timestamp: number) {
+  constructor(key: number, timestamp: number, title: string = '主页') {
     this.key = key
     this.timestamp = timestamp
+    this.title = title
   }
 }
 
@@ -49,6 +53,8 @@ const TAG: string = '[browser]'
 const MAX_TAB_COUNT: number = 10
 // changeIndex 需等待 Tabs 内 ForEach 完成新 TabContent 渲染，取经验延时
 const TAB_SWITCH_DELAY: number = 50
+// 页签标题为空时的兜底文案
+const DEFAULT_TAB_TITLE: string = '主页'
 
 export class Browser {
   inputValue: string = ""
@@ -56,18 +62,25 @@ export class Browser {
   progress: number = 0
   hideProgress: boolean = true
   loadingStatus: LoadingStatus = LoadingStatus.END
+  // 当前页签是否可前进/后退，由 updateHistoryState 同步，供工具栏做禁用态展示
+  canBack: boolean = false
+  canForward: boolean = false
 
   webArray: Array<WebKey> = [new WebKey(0, new Date().getTime())]
-  // 页签条展示的标题，与 webArray 同步维护；加载完成后由 onPageEnd 更新为实际页面标题
-  tabTitles: Array<string> = ['主页']
   tabsController: TabsController = new TabsController()
   webControllerArray: Array<WebObject> = [new WebObject(new webview.WebviewController(), false)]
 
   deleteTab(index: number) {
+    // 至少保留一个页签：关闭最后一个页签会让 Tabs 无数据源，Web 组件直接失效
+    if (this.webArray.length <= 1) {
+      promptAction.showToast({
+        message: '至少保留一个页签'
+      })
+      return
+    }
     Logger.info(TAG, `delete before tab index= ${index} controller length ${this.webControllerArray.length} tabArrayIndex= ${this.tabArrayIndex}`)
     this.webArray.splice(index, 1)
     this.webControllerArray.splice(index, 1)
-    this.tabTitles.splice(index, 1)
     if (this.tabArrayIndex > index || this.tabArrayIndex === this.webArray.length) {
       this.tabArrayIndex -= 1
     }
@@ -81,6 +94,7 @@ export class Browser {
     // 与 addTab 保持一致：先等 ForEach 完成页签重建，再切换选中项，避免切换到未渲染的页签
     setTimeout(() => {
       this.tabsController.changeIndex(this.tabArrayIndex)
+      this.updateHistoryState()
     }, TAB_SWITCH_DELAY)
   }
 
@@ -89,7 +103,7 @@ export class Browser {
   }
 
   addTab() {
-    if (this.webArray.length > MAX_TAB_COUNT) {
+    if (this.webArray.length >= MAX_TAB_COUNT) {
       promptAction.showToast({
         message: '页签数量已满'
       })
@@ -99,11 +113,11 @@ export class Browser {
     let object = new WebObject(webController, false)
     this.webControllerArray.push(object)
     this.webArray.push(new WebKey(this.webArray.length, new Date().getTime()))
-    this.tabTitles.push('主页')
     this.tabArrayIndex = this.webArray.length - 1
     Logger.info(TAG, `add tab index= ${this.tabArrayIndex}`)
     setTimeout(() => {
       this.tabsController.changeIndex(this.tabArrayIndex)
+      this.updateHistoryState()
     }, TAB_SWITCH_DELAY)
   }
 
@@ -116,11 +130,18 @@ export class Browser {
   }
 
   setTabTitle(key: number, title: string) {
-    if (key < 0 || key >= this.tabTitles.length) {
+    if (key < 0 || key >= this.webArray.length) {
       return;
     }
     // 空标题回退为“主页”，避免页签显示空白
-    this.tabTitles[key] = title.length > 0 ? title : '主页'
+    this.webArray[key].title = title.length > 0 ? title : DEFAULT_TAB_TITLE
+  }
+
+  // 同步前进/后退可用状态：页面加载结束、页签切换后调用
+  updateHistoryState() {
+    const controller = this.webControllerArray[this.tabArrayIndex]?.controller;
+    this.canBack = controller?.accessBackward() ?? false;
+    this.canForward = controller?.accessForward() ?? false;
   }
 
   setInputVal(inputValue: string) {
@@ -140,14 +161,16 @@ export class Browser {
   }
 
   Back() {
-    if (this.webControllerArray[this.tabArrayIndex]?.controller.accessBackward()) {
-      this.webControllerArray[this.tabArrayIndex]?.controller.backward();
+    const controller = this.webControllerArray[this.tabArrayIndex]?.controller;
+    if (controller?.accessBackward()) {
+      controller.backward();
     }
   }
 
   Forward() {
-    if (this.webControllerArray[this.tabArrayIndex]?.controller.accessForward()) {
-      this.webControllerArray[this.tabArrayIndex]?.controller.forward();
+    const controller = this.webControllerArray[this.tabArrayIndex]?.controller;
+    if (controller?.accessForward()) {
+      controller.forward();
     }
   }
 

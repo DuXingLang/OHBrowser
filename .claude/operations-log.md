@@ -14,7 +14,23 @@
 5. HTML 修复：phone.html 全角冒号、自闭合 div、缺 viewport 与 adapterDevice；pad.html 全角冒号、缺失分号、isPhone 未声明。
 6. 单元测试：UrlFormatter.ts 抽取纯函数，tests/formatUrl.test.mjs 7 用例全过；tests/check-json5.mjs 校验 8 个 json5 全过。
 7. 文档：README_zh.md 同步 API 12 迁移说明。
-8. 待执行：git commit（中文提交信息）。
+8. 提交 `164919b`（中文提交信息，25 文件 +733/−315）。
+
+## 2026-10-27 第二轮（整体测试 / 缺陷修复 / 响应式与 UX）
+9. 建立静态测试层（tests/，Node 直跑，无构建链也能回归）：
+   - `check-resources.mjs`：源码 `$r/$rawfile` 与 json5 `$string:/$media:/$color:/$profile:` 引用逐条对照 base/dark/en_US/rawfile 定义；
+   - `check-structure.mjs`：相对导入符号、ForEach 三参数、rawfile HTML（自闭合/全角标点/本地图片/getElementById/on* 函数/etsObj 注册）；
+   - package.json 增加 `npm run check` 串联三个脚本。
+10. 静态检查首轮报错并修复：
+    - PhoneLayout.ets 引用不存在的 `app.media.aa/bb/add/delete/fresh/home`（编译必失败）→ 映射到 ic_public_back/add/cancel_filled/refresh/home/advance；
+    - PhoneToolBar 6×`width('20%')` 溢出 → `layoutWeight(1)`；`.id(item.id)` 数值改字符串模板；
+    - Browser.deleteTab 增加“至少保留一个页签”守卫 + toast；页签上限判断 `>` 改 `>=`；
+    - 页签标题移入 `@Observed WebKey.title`，新增 `TabItem(@ObjectLink)`；页签条改 Stack 布局，关闭按钮独立热区，避免一次点击触发选择+关闭；页签条套横向 Scroll；onSelect 增加越界守卫。
+11. 响应式重构：Index.ets 改用 mediaquery `'(width<600vp)'` 断点（try/catch 失败退回 deviceType）；`homeIsPhone` 启动时一次确定保证 Web src 稳定；手机布局页签数 >1 时补页签条；Web 增加 `zoomAccess`/`darkMode(Auto)`；根容器补齐 100% 尺寸与背景色。
+12. UX：前进/后退/关闭不可用时置灰（`canBack/canForward` + `updateHistoryState()`）；地址栏 `enterKeyType(Go)`；提交后清空按钮可用态；关闭按钮补 `accessibilityText`。
+13. 首页 HTML 重做：手机/平板首页改用 CSS 变量实现 `prefers-color-scheme` 深浅色、栅格自适应 + 站点区滚动、横屏/矮屏压缩留白、输入框左右留白与字号修正；pad.html 补 head/meta viewport，`adapterDevice` 改为空实现（不再强制 720 布局宽度）。
+14. 检查器自身修复：CSS 全角标点检测先剔除 `/* */` 注释，避免中文注释误报。
+15. 文档：README_zh.md（使用说明/工程目录/具体实现/约束）同步；HANDOFF.md 更新；新增 `.claude/context-summary-browser-round2.md` 与 `.claude/verification-report-browser-round2.md`。
 
 ## 已知限制
-- 本环境无 DevEco Studio/hvigor 构建链，未执行 hvigorw 真机编译验证；已通过 Node 单测与 json5 语法校验替代。
+- 本环境无 DevEco Studio/hvigor 构建链，未执行 hvigorw 真机编译验证；已通过 Node 单测 + 三项静态检查 + 人工审查替代。

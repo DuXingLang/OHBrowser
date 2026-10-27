@@ -12,9 +12,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Browser, LoadingStatus, WebObject } from '../model/Browser';
+import { Browser, LoadingStatus, WebKey, WebObject } from '../model/Browser';
 import Logger from '../model/Logger';
-import webview from '@ohos.web.webview';
 import { promptAction } from '@kit.ArkUI';
 
 const TAG: string = '[TitleBar]';
@@ -25,6 +24,13 @@ const ICON_SIZE: number = 24;
 const BUTTON_RADIUS: number = 4;
 // 页签固定宽度
 const TAB_WIDTH: number = 180;
+// 页签条高度
+const TAB_BAR_HEIGHT: number = 33;
+// 页签关闭按钮尺寸
+const CLOSE_BUTTON_SIZE: number = 33;
+const CLOSE_ICON_SIZE: number = 20;
+// 不可用按钮的透明度，用于表达“前进/后退”当前不可点击
+const DISABLED_OPACITY: number = 0.4;
 
 interface TitleButtonItem {
   imageSrc: Resource,
@@ -36,10 +42,7 @@ export struct TabletTitle {
   @Link browser: Browser;
   @State arrayIndex: number = 0;
   private addr: string = '';
-  private navigationButton: Array<{
-    imageSrc: Resource,
-    id: number
-  }> = [
+  private navigationButton: TitleButtonItem[] = [
     {
       imageSrc: $r('app.media.ic_public_back'),
       id: 1
@@ -57,10 +60,7 @@ export struct TabletTitle {
       id: 4
     },
   ]
-  private actionButton: Array<{
-    imageSrc: Resource,
-    id: number
-  }> = [
+  private actionButton: TitleButtonItem[] = [
     {
       imageSrc: $r('app.media.submit'),
       id: 5
@@ -71,11 +71,22 @@ export struct TabletTitle {
     },
   ]
 
+  // 前进/后退不可用时降低图标透明度
+  private navOpacity(id: number): number {
+    if (id === 1 && !this.browser.canBack) {
+      return DISABLED_OPACITY;
+    }
+    if (id === 2 && !this.browser.canForward) {
+      return DISABLED_OPACITY;
+    }
+    return 1;
+  }
+
   build() {
     Row() {
-      ForEach(this.navigationButton, (item, index) => {
+      ForEach(this.navigationButton, (item: TitleButtonItem, index: number) => {
         Button({ type: ButtonType.Normal }) {
-          Image(item.imageSrc).width(ICON_SIZE).height(ICON_SIZE)
+          Image(item.imageSrc).width(ICON_SIZE).height(ICON_SIZE).opacity(this.navOpacity(item.id))
         }
         .margin(8)
         .id(`navigationButton${index}`)
@@ -110,7 +121,7 @@ export struct TabletTitle {
               break;
           }
         })
-      }, item => item.id.toString())
+      }, (item: TitleButtonItem) => item.id.toString())
 
       TextInput({ placeholder: $r('app.string.Input_url'), text: this.browser.inputValue })
         .placeholderFont({ size: 18, weight: 500 })
@@ -121,6 +132,7 @@ export struct TabletTitle {
         .onChange((value: string) => {
           this.addr = value;
         })
+        .enterKeyType(EnterKeyType.Go)
         .onSubmit((enterKey: EnterKeyType) => {
           Logger.info(TAG, `onSubmit`)
           if (this.addr.length !== 0) {
@@ -171,64 +183,89 @@ export struct TabletTitle {
   }
 }
 
+// 单个页签：@ObjectLink 绑定 WebKey，标题变化只刷新该页签
+@Component
+struct TabItem {
+  @ObjectLink item: WebKey;
+  @Prop active: boolean = false;
+  onSelect: (key: number) => void = () => {
+  };
+  onClose: (key: number) => void = () => {
+  };
+
+  build() {
+    // 用 Stack 让关闭按钮独立占据右侧热区，避免与页签选择点击嵌套、一次点击触发两个动作
+    Stack({ alignContent: Alignment.End }) {
+      Row() {
+        Text(this.item.title ? this.item.title : '主页')
+          .fontSize(14)
+          .maxLines(1)
+          .textOverflow({ overflow: TextOverflow.Ellipsis })
+          .textAlign(TextAlign.Center)
+          .width('100%')
+          .padding({ left: 8, right: CLOSE_BUTTON_SIZE + 4 })
+      }
+      .width('100%')
+      .height('100%')
+      .onClick((event: ClickEvent) => {
+        this.onSelect(this.item.key);
+      })
+
+      Button({ type: ButtonType.Normal, stateEffect: true }) {
+        Image($r('app.media.ic_public_cancel_filled')).width(CLOSE_ICON_SIZE).height(CLOSE_ICON_SIZE)
+      }
+      .backgroundColor($r('app.color.transparent'))
+      .width(CLOSE_BUTTON_SIZE)
+      .height(CLOSE_BUTTON_SIZE)
+      .borderRadius(5)
+      .flexShrink(0)
+      .margin({ right: 2 })
+      .accessibilityText('关闭页签')
+      .onClick((event: ClickEvent) => {
+        this.onClose(this.item.key);
+      })
+    }
+    .width(TAB_WIDTH)
+    .height('100%')
+    .backgroundColor(this.active ? $r('app.color.tab_active_bg') : $r('app.color.tab_bar_bg'))
+  }
+}
+
 @Component
 export struct BrowserTabs {
   @Link browser: Browser;
-  @State tabButtonIndex: number = -1;
 
   build() {
-    Flex({ direction: FlexDirection.Row, alignItems: ItemAlign.Start }) {
-      ForEach(this.browser.webArray, (item, index) => {
-        Row() {
-          Row() {
-            // 展示实际页面标题（onPageEnd 时更新），空标题回退为“主页”
-            Text(this.browser.tabTitles[item.key] ?? '主页')
-              .fontSize(14)
-              .maxLines(1)
-              .textOverflow({ overflow: TextOverflow.Ellipsis })
-          }
-          .width('100%')
-          .flexShrink(1)
-          .justifyContent(FlexAlign.Center)
-          .height('100%')
-
-          Button({ type: ButtonType.Normal }) {
-            Image($r('app.media.ic_public_cancel_filled')).width(20).height(20)
-          }
-          .backgroundColor(this.tabButtonIndex === item.key ? $r('app.color.press_bg') : $r('app.color.transparent'))
-          .id('cancelBtn')
-          .margin({ right: 2 })
-          .width(33)
-          .height(33)
-          .borderRadius(5)
-          .flexShrink(0)
-          .onTouch((event: TouchEvent) => {
-            if (event.type === TouchType.Down) {
-              this.tabButtonIndex = item.key;
-            } else if (event.type === TouchType.Up) {
-              this.tabButtonIndex = -1;
+    // 页签数量多于一屏时可横向滚动，避免多余页签被裁掉、无法切换
+    Scroll() {
+      Row() {
+        ForEach(this.browser.webArray, (item: WebKey, index: number) => {
+          TabItem({
+            item: item,
+            active: this.browser.tabArrayIndex === item.key,
+            onSelect: (key: number) => {
+              Logger.info(TAG, `key= ${key}`);
+              // 关闭按钮与页签选择同源事件时可能收到已失效的下标，越界直接忽略
+              if (key < 0 || key >= this.browser.webArray.length) {
+                return;
+              }
+              this.browser.setTabArrayIndex(key);
+              this.browser.tabsController.changeIndex(key);
+              this.browser.updateHistoryState();
+            },
+            onClose: (key: number) => {
+              this.browser.deleteTab(key);
             }
           })
-          .onClick((event: ClickEvent) => {
-            if (this.browser.webArray.length > 1) {
-              this.browser.deleteTab(item.key);
-            }
-          })
-        }
-        .width(TAB_WIDTH)
-        .height('100%')
-        .backgroundColor(this.browser.tabArrayIndex === item.key
-          ? $r('app.color.tab_active_bg') : $r('app.color.tab_bar_bg'))
-        .onClick((event: ClickEvent) => {
-          Logger.info(TAG, `key= ${item.key}`);
-          this.browser.setTabArrayIndex(item.key);
-          this.browser.tabsController.changeIndex(item.key);
-        })
-
-        Divider().vertical(true).color($r('app.color.divider_color'))
-      }, (item) => item.timestamp.toString())
+          Divider().vertical(true).color($r('app.color.divider_color'))
+        }, (item: WebKey) => item.timestamp.toString())
+      }
+      .height('100%')
     }
-    .height(33)
+    .scrollable(ScrollDirection.Horizontal)
+    .scrollBar(BarState.Off)
+    .height(TAB_BAR_HEIGHT)
+    .width('100%')
     .flexShrink(0)
     .backgroundColor($r('app.color.tab_bar_bg'))
   }
@@ -237,8 +274,9 @@ export struct BrowserTabs {
 @Component
 export struct WebTab {
   @Link browser: Browser;
-  @Link isPhone: boolean;
-  isRegistered: boolean = false;
+  // 起始首页按设备形态决定，运行期保持不变：横竖屏切换时 Web 的 src 不变，避免旋转导致页面重载
+  @Prop homeIsPhone: boolean = true;
+  // 注入给 HTML 的桥接对象，方法名需与 registerJavaScriptProxy 的第三个参数一致
   testObj = {
     test: (addr: string) => {
       // HTML 端传入裸域名，统一走 formatUrl 做协议补全与搜索词归一化
@@ -252,10 +290,10 @@ export struct WebTab {
 
   build() {
     Tabs({ barPosition: BarPosition.Start, controller: this.browser.tabsController }) {
-      ForEach(this.browser.webArray, (item, index) => {
+      ForEach(this.browser.webArray, (item: WebKey, index: number) => {
         TabContent() {
           Web({
-            src: this.isPhone ? $rawfile('phone.html') : $rawfile('pad.html'),
+            src: this.homeIsPhone ? $rawfile('phone.html') : $rawfile('pad.html'),
             controller: this.browser?.webControllerArray[item.key]?.controller
           })
             .javaScriptAccess(true)
@@ -263,6 +301,9 @@ export struct WebTab {
             .domStorageAccess(true)
             .mixedMode(MixedMode.All)
             .multiWindowAccess(true)
+            .zoomAccess(true)
+            // 跟随系统深浅色：网页内容一并切换暗色渲染
+            .darkMode(WebDarkMode.Auto)
             .onWindowNew((event) => {
               Logger.info(TAG, `onWindowNew targetUrl: ` + event.targetUrl);
               if (event.targetUrl !== 'about:blank' && event.targetUrl !== '') {
@@ -293,6 +334,7 @@ export struct WebTab {
                 } catch (error) {
                   Logger.error(TAG, `getTitle failed: ${JSON.stringify(error)}`);
                 }
+                this.browser.updateHistoryState();
               }
             })
             .onProgressChange((event) => {
@@ -301,6 +343,7 @@ export struct WebTab {
               if (this.browser.progress === 100) {
                 this.browser.hideProgress = true;
                 this.browser.progress = 0;
+                this.browser.updateHistoryState();
               } else {
                 this.browser.hideProgress = false;
               }
@@ -312,7 +355,7 @@ export struct WebTab {
               }
             })
         }
-      }, (item) => item.timestamp.toString())
+      }, (item: WebKey) => item.timestamp.toString())
     }
     .barHeight(0)
     .scrollable(false)

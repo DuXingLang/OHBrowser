@@ -1,148 +1,202 @@
 <!DOCTYPE html>
-<html style="width:100%;height:100%;">
-<style>
-    .tablet {
-        justify-content:space-around;
-        display:flex;
-        margin-left:130px;
-        margin-right:130px;
-        margin-top:90px;
-        flex-wrap: wrap
-    }
-    .searchArea {
-        min-width: 300px;
-        font-size: 1.9rem;
-        position: relative;
-        height: 53px;
-        margin: 0 auto;
-        box-shadow: 0 4px 10px rgb(0 0 0 / 10%);
-        width: 64%;
-        margin-top: 8%;
-        z-index: 4;
-    }
-    .searchFirm {
-        width: 33px;
-        height: 33px;
-        float: left;
-        border-top-left-radius: 8px;
-        border-bottom-left-radius: 8px;
-        position: absolute;
-        left: 10px;
-        z-index: 2;
-    }
-    .searchFirmIcon {
-        width: 20px;
-        height: 20px;
-        margin: 16px auto ;
-        cursor: pointer;
-        background-position: 24px -24px;
-        background-size: 20px;
-        background-repeat: no-repeat;
-    }
-    .sfBaidu {
-        background-position: 0 -40px;
-    }
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>主页</title>
+    <style>
+        /* 跟随系统深浅色：ArkTS 侧 Web 使用 WebDarkMode.Auto，页面自绘配色避免被整体反色 */
+        :root {
+            color-scheme: light dark;
+            --fg: #000000;
+            --card-alpha: rgba(255, 255, 255, 0.75);
+            --press: #e4e4e4;
+            --shadow: 0 4px 10px rgb(0 0 0 / 10%);
+        }
+        @media (prefers-color-scheme: dark) {
+            :root {
+                --fg: #e6e6e6;
+                --card-alpha: rgba(255, 255, 255, 0.12);
+                --press: #2a2e35;
+                --shadow: 0 4px 10px rgb(0 0 0 / 45%);
+            }
+        }
+        html, body {
+            margin: 0;
+            padding: 0;
+            height: 100%;
+            color: var(--fg);
+        }
+        body {
+            background-image: linear-gradient(rgba(255, 255, 255, 0.28), rgba(255, 255, 255, 0.28)), url(./backgroundImg.jpg);
+            background-size: cover;
+            background-position: center;
+        }
+        @media (prefers-color-scheme: dark) {
+            body {
+                background-image: linear-gradient(rgba(0, 0, 0, 0.62), rgba(0, 0, 0, 0.62)), url(./backgroundImg.jpg);
+            }
+        }
+        /* 页面纵向流式布局：搜索区固定，站点区占满剩余高度并可滚动，矮屏/横屏不会截断图标 */
+        .page {
+            display: flex;
+            flex-direction: column;
+            width: 100%;
+            height: 100%;
+        }
+        .searchArea {
+            min-width: 300px;
+            font-size: 1.9rem;
+            position: relative;
+            height: 53px;
+            margin: 8% auto 0;
+            box-shadow: var(--shadow);
+            width: min(64%, 720px);
+            z-index: 4;
+        }
+        #test {
+            flex: 1 1 auto;
+            overflow-y: auto;
+            -webkit-overflow-scrolling: touch;
+        }
+        /* 站点栅格：宽度大时限制最大宽度并居中，避免图标被拉到屏幕两端 */
+        .tablet {
+            justify-content: space-around;
+            align-content: flex-start;
+            display: flex;
+            max-width: 960px;
+            margin: 48px auto 24px;
+            padding: 0 32px;
+            box-sizing: border-box;
+            flex-wrap: wrap;
+        }
+        /* 矮屏或横屏时压缩留白，保证一屏内可见更多站点 */
+        @media (max-height: 700px), (orientation: landscape) {
+            .searchArea {
+                margin-top: 3%;
+            }
+            .tablet {
+                margin-top: 24px;
+            }
+        }
+        .searchFirm {
+            width: 33px;
+            height: 33px;
+            float: left;
+            border-top-left-radius: 8px;
+            border-bottom-left-radius: 8px;
+            position: absolute;
+            left: 10px;
+            z-index: 2;
+        }
+        .searchFirmIcon {
+            width: 20px;
+            height: 20px;
+            margin: 16px auto;
+            cursor: pointer;
+            background-position: 24px -24px;
+            background-size: 20px;
+            background-repeat: no-repeat;
+        }
+        .sfBaidu {
+            background-position: 0 -40px;
+        }
 
-    #searchCon {
-        height: 100%;
-        background: transparent;
-        float: left;
-        border: none;
-        margin: 0 33px 0 0;
-        width: calc(100% - 80px);
-        font-size: 18px;
-        z-index: 2;
-        position: absolute;
-        right: 0;
-        outline: none;
-    }
-</style>
-<script>
-	var isPhone = false;
-	function initPad() {
-	    isPhone = false;
-		func1();
-	}
-	function adapterDevice() {
-	    console.info('function adapterDevice');
-	    let v = document.querySelector('meta[name="viewport"]');
-        if (v) {
-            v.setAttribute('content', 'width=720, user-scalable=yes');
-        } else {
-            let m = document.createElement('meta');
-            m.content = 'width=720, user-scalable=yes';
-            m.name = 'viewport';
-            document.getElementsByTagName('head')[0].appendChild(m);
+        #searchCon {
+            height: 100%;
+            background: transparent;
+            color: var(--fg);
+            border: none;
+            font-size: 17px;
+            z-index: 2;
+            position: absolute;
+            /* 左侧留给搜索源图标、右侧留给搜索按钮，输入区居中不自适应撑开 */
+            left: 48px;
+            right: 44px;
+            width: auto;
+            outline: none;
         }
-	}
-    function func1() {
-        let array = [{src: './bing.png', name:'必应', addr: 'bing.com'},
-             {src: './12306.png', name: '12306', addr: 'www.12306.cn'},
-             {src: './dianping.png', name: '大众点评', addr:'www.dianping.com'},
-             {src: './sina.png', name: '新浪新闻', addr:'news.sina.com.cn/'},
-             {src: './jingdong.png', name: '京东', addr:'www.jd.com'},
-             {src: './pinduoduo.png', name: '拼多多', addr:'www.pinduoduo.com'},
-             {src: './weibo.png', name:'微博', addr: 'weibo.com/'},
-             {src: './taobao.png', name:'淘宝', addr: 'www.tmall.com'},
-             {src: './weipinhui.png', name:'唯品会', addr:'www.vip.com'},
-             {src: './weixin.png', name:'微信阅读', addr:'weread.qq.com'},
-             {src: './zhihu.png', name:'知乎', addr:'www.zhihu.com'},
-             {src: './xiecheng.png', name:'携程', addr:'www.ctrip.com'},]
-      let div = document.getElementById('test');
-      div.className = isPhone ? 'phone' : 'tablet'
-      for(let i = 0; i < array.length; i++) {
-        let box = document.createElement('div');
-		box.style.display = 'flex';
-		box.style.flexDirection = 'column';
-		box.style.justifyContent = 'center';
-		box.style.alignItems = 'center';
-		box.style.height = '120px';
-		box.style.minWidth = '100px';
-		box.style.borderRadius = '15px';
-		box.addEventListener('touchstart', function(e){
-			box.style.backgroundColor = '#e4e4e4';
-		});
-		box.addEventListener('touchend', function(e){
-			box.style.backgroundColor = '#00000000';
-		});
-        let text = document.createElement('p');
-		text.innerHTML = array[i].name;
-        text.style.fontSize = '13px';
-        text.style.fontWeight = 400;
-        let image = new Image();
-        image.src = array[i].src;
-        image.style.width = '48px';
-		image.style.height = '48px';
-        image.onclick = function() {
-            console.info('image.onclick');
-            etsObj.test(array[i].addr);
+    </style>
+    <script>
+        var isPhone = false;
+        function initPad() {
+            isPhone = false;
+            func1();
         }
-        box.appendChild(image);
-        box.appendChild(text);
-        div.appendChild(box);
-      }
-    }
-    function uploadWord() {
-        let inputDom = document.getElementById('searchCon');
-        console.info(`pad inputDom.value=${inputDom.value}`);
-        etsObj.searchWord(inputDom.value);
-    }
+        // WebTab onPageEnd 时由 ArkTS 侧 runJavaScript 调用；
+        // 页面已用 width=device-width 自适应，不再强制 720 布局宽度
+        function adapterDevice() {
+            console.info('function adapterDevice');
+        }
+        function func1() {
+            let array = [{src: './bing.png', name: '必应', addr: 'bing.com'},
+                 {src: './12306.png', name: '12306', addr: 'www.12306.cn'},
+                 {src: './dianping.png', name: '大众点评', addr: 'www.dianping.com'},
+                 {src: './sina.png', name: '新浪新闻', addr: 'news.sina.com.cn/'},
+                 {src: './jingdong.png', name: '京东', addr: 'www.jd.com'},
+                 {src: './pinduoduo.png', name: '拼多多', addr: 'www.pinduoduo.com'},
+                 {src: './weibo.png', name: '微博', addr: 'weibo.com/'},
+                 {src: './taobao.png', name: '淘宝', addr: 'www.tmall.com'},
+                 {src: './weipinhui.png', name: '唯品会', addr: 'www.vip.com'},
+                 {src: './weixin.png', name: '微信阅读', addr: 'weread.qq.com'},
+                 {src: './zhihu.png', name: '知乎', addr: 'www.zhihu.com'},
+                 {src: './xiecheng.png', name: '携程', addr: 'www.ctrip.com'}]
+            let div = document.getElementById('test')
+            div.className = isPhone ? 'phone' : 'tablet'
+            for (let i = 0; i < array.length; i++) {
+                let box = document.createElement('div')
+                box.style.display = 'flex'
+                box.style.flexDirection = 'column'
+                box.style.justifyContent = 'center'
+                box.style.alignItems = 'center'
+                box.style.height = '120px'
+                box.style.minWidth = '100px'
+                box.style.margin = '4px'
+                box.style.borderRadius = '15px'
+                box.addEventListener('touchstart', function (e) {
+                    box.style.backgroundColor = 'var(--press)'
+                })
+                box.addEventListener('touchend', function (e) {
+                    box.style.backgroundColor = 'transparent'
+                })
+                let text = document.createElement('p')
+                text.innerHTML = array[i].name
+                text.style.fontSize = '13px'
+                text.style.fontWeight = 400
+                let image = new Image()
+                image.src = array[i].src
+                image.style.width = '48px'
+                image.style.height = '48px'
+                image.onclick = function () {
+                    console.info('image.onclick')
+                    etsObj.test(array[i].addr)
+                }
+                box.appendChild(image)
+                box.appendChild(text)
+                div.appendChild(box)
+            }
+        }
+        function uploadWord() {
+            let inputDom = document.getElementById('searchCon')
+            console.info(`pad inputDom.value= ${inputDom.value}`)
+            etsObj.searchWord(inputDom.value)
+        }
 
-    function searchWord(e) {
-        console.info(`searchWord keyCode=${e.keyCode}`);
-        if (e.keyCode === 13) {
-            let inputDom = document.getElementById('searchCon');
-            console.info(`phone inputDom.value=${inputDom.value}`);
-            etsObj.searchWord(inputDom.value);
-            return true;
+        function searchWord(e) {
+            console.info(`searchWord keyCode=${e.keyCode}`)
+            if (e.keyCode === 13) {
+                let inputDom = document.getElementById('searchCon')
+                console.info(`pad inputDom.value= ${inputDom.value}`)
+                etsObj.searchWord(inputDom.value)
+                return true
+            }
+            return false
         }
-        return false;
-    }
- </script>
-<body style="margin: 0px; background-image: url(./backgroundImg.jpg);
-    background-size:cover; height:100%; padding-bottom:60px" onload="initPad()">
-<div style="display:flex;flex-direction:column;width:100%;padding-bottom:60px">
-    <div class="searchArea" style="border-radius: 20px; display: block; background-color: rgba(255, 255, 255, 0.7);flex-shrink: 0;">
+    </script>
+</head>
+<body onload="initPad()">
+<div class="page">
+    <div class="searchArea" style="border-radius: 20px; display: block; background-color: var(--card-alpha); flex-shrink: 0;">
         <div class="searchFirm" style="border-bottom-left-radius: 8px; border-top-left-radius: 8px;">
             <div class="searchFirmIcon sfBaidu" style="background-image: url(./all.png);">
             </div>
@@ -157,7 +211,7 @@
             <img src="./search.svg" style="width: 20px; height: 20px;">
         </div>
     </div>
-    <div id = "test"></div>
+    <div id="test"></div>
 </div>
-</body >
+</body>
 </html>

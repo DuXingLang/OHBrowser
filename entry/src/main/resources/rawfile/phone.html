@@ -3,15 +3,55 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>主页</title>
 </head>
 <style>
+    /* 跟随系统深浅色：ArkTS 侧 Web 使用 WebDarkMode.Auto，页面自绘配色避免被整体反色 */
+    :root {
+        color-scheme: light dark;
+        --bg: #fdfdfd;
+        --fg: #000000;
+        --card-alpha: rgba(255, 255, 255, 0.7);
+        --press: #e4e4e4;
+        --shadow: 0 4px 10px rgb(0 0 0 / 10%);
+    }
+    @media (prefers-color-scheme: dark) {
+        :root {
+            --bg: #101215;
+            --fg: #e6e6e6;
+            --card-alpha: rgba(255, 255, 255, 0.12);
+            --press: #2a2e35;
+            --shadow: 0 4px 10px rgb(0 0 0 / 45%);
+        }
+    }
+    html, body {
+        margin: 0;
+        padding: 0;
+        height: 100%;
+        background-color: var(--bg);
+        color: var(--fg);
+    }
+    /* 页面纵向流式布局：搜索区固定，站点区占满剩余高度并可滚动，矮屏/横屏不会截断图标 */
+    .page {
+        display: flex;
+        flex-direction: column;
+        background-color: var(--bg);
+        width: 100%;
+        height: 100%;
+    }
     .phone {
-        justify-content:space-around;
-        display:flex;
-        margin-left:30px;
-        margin-right:30px;
-        margin-top:80px;
-        flex-wrap: wrap
+        justify-content: space-around;
+        align-content: flex-start;
+        display: flex;
+        margin-left: 16px;
+        margin-right: 16px;
+        margin-top: 40px;
+        flex-wrap: wrap;
+    }
+    #test {
+        flex: 1 1 auto;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
     }
     .searchArea {
         min-width: 150px;
@@ -19,10 +59,19 @@
         position: relative;
         height: 48px;
         margin: 0 auto;
-        box-shadow: 0 4px 10px rgb(0 0 0 / 10%);
+        box-shadow: var(--shadow);
         width: 80%;
-        margin-top: 26%;
+        margin-top: 20%;
         z-index: 4;
+    }
+    /* 横屏时屏幕高度紧张，压缩搜索区上方留白，避免站点区被挤出可视范围 */
+    @media (orientation: landscape) {
+        .searchArea {
+            margin-top: 8%;
+        }
+        .phone {
+            margin-top: 16px;
+        }
     }
     .searchFirm {
         width: 33px;
@@ -50,14 +99,15 @@
     #searchCon {
         height: 100%;
         background: transparent;
-        float: left;
+        color: var(--fg);
         border: none;
-        margin: 0 33px 0 0;
-        width: calc(100% - 120px);
-        font-size: 26px;
+        font-size: 17px;
         z-index: 2;
         position: absolute;
-        right: 0;
+        /* 左侧留给搜索源图标、右侧留给搜索按钮，输入区居中不自适应撑开 */
+        left: 48px;
+        right: 44px;
+        width: auto;
         outline: none;
     }
 </style>
@@ -104,14 +154,15 @@
 		box.style.flexDirection = 'column'
 		box.style.justifyContent = 'center'
 		box.style.alignItems = 'center'
-		box.style.height = '120px'
-		box.style.minWidth = '120px'
+		box.style.height = '104px'
+		box.style.minWidth = '88px'
+		box.style.margin = '4px'
 		box.style.borderRadius = '15px'
 		box.addEventListener('touchstart', function(e){
-			box.style.backgroundColor = '#e4e4e4'
+			box.style.backgroundColor = 'var(--press)'
 		})
 		box.addEventListener('touchend', function(e){
-			box.style.backgroundColor = '#00000000'
+			box.style.backgroundColor = 'transparent'
 		})
         let text = document.createElement('p')
 		text.innerHTML = array[i].name
@@ -142,9 +193,9 @@
         }
     }
  </script>
-<body style="height:100%;margin:0px" onload="initPhone()">
-<div style="display:flex;flex-direction:column;background-color:#fdfdfd;width:100%;height:100%">
-    <div class="searchArea" style="border-radius: 60px; display: block; background-color: rgba(255, 255, 255, 0.7);flex-shrink: 0;">
+<body onload="initPhone()">
+<div class="page">
+    <div class="searchArea" style="border-radius: 60px; display: block; background-color: var(--card-alpha); flex-shrink: 0;">
         <div class="searchFirm" style="border-bottom-left-radius: 8px; border-top-left-radius: 8px;">
             <div class="searchFirmIcon sfBaidu" style="background-image: url(./all.png);">
             </div>

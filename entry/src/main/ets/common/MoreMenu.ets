@@ -96,6 +96,12 @@ export struct MoreMenuButton {
         }
       },
       {
+        value: '历史记录',
+        action: () => {
+          this.browser.openHistory();
+        }
+      },
+      {
         value: '清除浏览数据',
         action: () => {
           this.browser.clearBrowsingData();

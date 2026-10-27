@@ -22,12 +22,13 @@
 - 第二轮（`90d35e7`）：补齐**静态测试层**，据此找出并修复 10 项缺陷；布局判定改为窗口宽度断点；首页 HTML 改自绘深浅色 + 自适应栅格；文档三件套同步。
 - 第三轮（本轮）：修复新增页签崩溃（17100001）、顶栏按 Chrome 风格重做（页签条 + 药丸地址栏 + 圆形按钮）、删除与 oh-package.json5 冲突的根目录 package.json、首页新增百度快捷入口。
 - 第四轮（`45cff8e`，已推送）：按 OpenHarmony 5.0.3 官方 ArkWeb 文档补齐能力（缩放 / 桌面版 UA / 强制深色 / 缓存策略 / 清除浏览数据 / 下载 / 页签图标 / 网页全屏 / HTTP 与渲染异常提示），顺带修复 `PhoneLayout.ets` 使用未声明 `TAG` 的编译级缺陷，并给静态检查器加了 TAG 与 @ObjectLink 传参两类规则。
-- 第五轮（当前工作区未提交）：页面内查找（`searchAllAsync`/`searchNext`/`clearMatches` + `onSearchResultReceive`）与书签（纯函数序列化 + preferences 持久化 + 面板），补 7 个书签单测。
+- 第五轮（`edd5171`，已推送）：页面内查找（`searchAllAsync`/`searchNext`/`clearMatches` + `onSearchResultReceive`）与书签（纯函数序列化 + preferences 持久化 + 面板），补 7 个书签单测。
+- 第六轮（当前工作区未提交）：`window.open` 新页签支持（`onWindowNew`/`onWindowExit` + `allowWindowOpenMethod`）与历史记录（纯函数去重/上限 + preferences 持久化 + 面板），补 6 个历史单测。
 
 ## 三、验证怎么跑（本机可跑，无需 SDK）
 
 ```bash
-node --test                     # 单元测试：14 用例（formatUrl 7 + 书签 7）
+node --test                     # 单元测试：20 用例（formatUrl 7 + 书签 7 + 历史 6）
 node tests/check-json5.mjs      # 静态检查：json5 配置可解析
 node tests/check-resources.mjs  # 静态检查：资源引用均已定义
 node tests/check-structure.mjs  # 静态检查：导入符号 / ForEach / rawfile HTML
@@ -36,10 +37,10 @@ node tests/check-structure.mjs  # 静态检查：导入符号 / ForEach / rawfil
 当前基线结果（改动后必须仍然全绿）：
 
 ```
-node --test                    → 14 pass / 0 fail
+node --test                    → 20 pass / 0 fail
 node tests/check-json5.mjs     → 8 个 json5 配置全部解析通过
-node tests/check-resources.mjs → 20 个源文件 70 处源码资源引用、4 个配置文件 16 处配置引用全部命中
-node tests/check-structure.mjs → 20 个源文件 28 处相对导入、6 处 ForEach、7 处 TAG 声明、5 个 @ObjectLink 组件 7 处调用、4 个 HTML 全部符合约束
+node tests/check-resources.mjs → 23 个源文件 83 处源码资源引用、4 个配置文件 16 处配置引用全部命中
+node tests/check-structure.mjs → 23 个源文件 38 处相对导入、7 处 ForEach、8 处 TAG 声明、6 个 @ObjectLink 组件 8 处调用、4 个 HTML 全部符合约束
 ```
 
 ## 四、本轮关键改动（含“为什么”）
@@ -104,12 +105,28 @@ node tests/check-structure.mjs → 20 个源文件 28 处相对导入、6 处 Fo
 - **面板与查找条同级**：都在 `WebTab` 之上、只在 `!webFullScreen` 时渲染，占用固定高度内部滚动，**不改动 Web 组件在组件树中的位置**，所以展开/收起都不会让网页重载。
 - **Context 只在 Index 拿一次**：`Index.aboutToAppear()` / `onDeviceChange()` 里调 `browser.initBookmarks(getContext(this))`；UI 组件不各自持有 Context，避免生命周期不一致。
 
+### 第六轮（window.open 新页签 + 历史记录）
+
+文档仍从 gitee `OpenHarmony-5.0.3-Release` 分支核对（本地副本 `.git/dsh-docs/web-attr.md`）：
+
+- **`window.open` 必须接住新页签**：`onWindowNew(callback: Callback<OnWindowNewEvent>)`（web-attr.md:5358-5436）里**必须调用 `event.handler.setWebController(controller)`**，否则渲染进程阻塞；不创建新窗口时传 `null`。`OnWindowNewEvent`（web-attr.md:10209）字段：`isAlert`（true=对话框）、`isUserTrigger`、`targetUrl`、`handler`。`ControllerHandler.setWebController`（web-attr.md:7303-7315）文档明示“不需要打开新窗口请设置为 null”。
+- **`window.open` 默认被拦截**：`allowWindowOpenMethod(true)`（web-attr.md:1719-1744，默认 false，受系统属性 `persist.web.allowWindowOpenMethod.enabled` 控制）不开的话 JS `window.open` 会被静默拦截。
+- **旧实现的 bug（已修）**：原来把 `event.targetUrl` 直接 `loadUrl` 到**当前页签**并 `setWebController(null)`——会顶掉用户正在看的页面，且 JS 先 `open('about:blank')` 再 `document.write` 的 popup 内容整段丢失。
+- **新实现**：`WebKey.blank` 字段（`constructor(key, timestamp, title='主页', blank=false)`），blank 页签 `src` 留空（`item.blank ? '' : 首页`，参照官方 sample `Web({ src: '', controller: popController })`）；`Browser.openTabForWindow(targetUrl)` 超过 `MAX_TAB_COUNT` 时 toast「页签数量已满」并返回 null，否则 push controller + 新 `WebKey(..., NEW_TAB_TITLE='新页签', true)`，`setTimeout(50)` 里 `changeIndex` + `updateHistoryState`，返回 WebObject。onWindowNew：`created === null ? handler.setWebController(null) : handler.setWebController(created.controller)`。
+- **网页 `window.close()`**：`onWindowExit(callback: () => void)`（web-attr.md:5437-5471）；实现里用 `indexOfTimestamp(item.timestamp)` 反查下标后 `deleteTab(index)`（关闭页签后 key 会重编号，用 timestamp 才可靠）。
+- **历史纯函数**：`model/HistoryList.ts` 的 `addHistory`（同址去重 + 提到最前 + 上限 `HISTORY_MAX_COUNT=200` 丢最旧）、`removeHistory`、`formatHistoryTime`（`月-日 时:分`，时间戳缺失返回空串）**不 import 任何模块**——Node ESM 解析要求导入带扩展名而 ArkTS 源码省略扩展名（曾报 `ERR_MODULE_NOT_FOUND`），宁可让纯模块零依赖也不引入 loader hook。序列化/解析/标题兜底复用 `BookmarkList`（结构一致），因此 `HistoryStore` import `parseBookmarks`/`stringifyBookmarks` 后自行 `slice(0, HISTORY_MAX_COUNT)`。
+- **历史记录时机**：`onPageEnd` 里 `recordHistory(event.url, pageTitle)`，只接受 `http` 开头（本地首页/about:blank 不入库）；标题随页面一起取，避免记成“新页签”。
+- **`clearBrowsingData` 一并清历史**：清除浏览数据后调 `historyStore.clear()`，否则历史面板仍有残留。
+- **面板 `HistoryPanel.ets`**：与 `BookmarkPanel` 同构（标题「历史记录」+「清空」（无记录时置灰）+ 关闭按钮；列表行显示标题/域名兜底 + 地址 + 访问时间，整行点击跳转、右侧删除按钮），`constraintSize({ maxHeight: 320 })` 内部滚动。
+- **6 个历史单测**：`tests/history.test.mjs`（追加置顶、同址去重且更新为最新、空 URL 忽略、超上限丢最旧、删除、时间格式化）。
+
 ## 五、未闭环（环境限制，非代码问题）
 
 - 本机无 DevEco Studio / OpenHarmony SDK / hvigorw，**未做编译与真机运行验证**。换有 DevEco 5.0+ 的环境执行 `hvigorw assembleHap` 复核 ArkTS 严格模式告警。
 - 真机手测清单：手机竖屏/横屏各走一遍新增页签→切换→关闭→旋转；平板上限 10 页签；深色模式下首页与网页配色；无历史时按返回键应退出应用。
 - 第四轮待真机确认项：更多菜单 8 个入口逐项生效（尤其切换缓存/深色后当前页自动刷新）、页面内下载能落盘到 `files/Download/`、视频网站全屏进出、页签图标刷新、断网时的错误提示文案。
 - 第五轮待真机确认项：查找条对中文关键字的匹配计数、跨页面跳转后计数是否归零、书签面板在小屏（<600vp）与横屏下的高度与滚动、重启应用后书签是否仍在（`flush()` 是否真正落盘）、同一网址重复收藏是否只剩一条。
+- 第六轮待真机确认项：`window.open` 弹出的新页签能否在 10 页签上限时正确拒绝、`onWindowExit`（网页 `window.close()`）后页签是否关闭、历史面板在手机横屏/小屏下的高度与滚动、重启应用后历史是否仍在、`clearBrowsingData` 是否同时清空历史。
 
 ## 六、踩过的坑（绝对不要再踩）
 
@@ -151,11 +168,14 @@ entry/src/main/ets/
 ├── model/Logger.ts            # hilog 封装（已修变参）
 ├── model/BookmarkList.ts      # 纯函数：书签序列化/解析/标题兜底（有单测）
 ├── model/BookmarkStore.ets    # @Observed 书签状态 + preferences 持久化
+├── model/HistoryList.ts       # 纯函数：历史去重/上限/时间格式化（有单测）
+├── model/HistoryStore.ets     # @Observed 历史状态 + preferences 持久化
 ├── common/TitleBar.ets        # 平板：TabletTitle / TabItem / BrowserTabs / WebTab（含下载、favicon、全屏、查找回调）
 ├── common/PhoneLayout.ets     # 手机：PhoneHeader / PhoneToolBar（含更多菜单入口）
-├── common/MoreMenu.ets        # 「更多」菜单：缩放/桌面版 UA/深色/缓存/清除数据/查找/书签
+├── common/MoreMenu.ets        # 「更多」菜单：缩放/桌面版 UA/深色/缓存/清除数据/查找/书签/历史
 ├── common/FindBar.ets         # 页面内查找条（输入/上一个/下一个/计数/关闭）
 ├── common/BookmarkPanel.ets   # 书签面板（收藏当前页/跳转/删除）
+├── common/HistoryPanel.ets    # 历史面板（跳转/删除/清空，含访问时间）
 ├── pages/Index.ets            # 入口：宽度断点/形态判定/布局分支/全屏隐藏/onBackPress
 └── Application/AbilityStage.ts、MainAbility/MainAbility.ts   # 未改动
 entry/src/main/resources/
@@ -165,6 +185,7 @@ entry/src/main/resources/
 tests/
 ├── formatUrl.test.mjs         # 7 用例（node --test）
 ├── bookmark.test.mjs          # 7 用例：书签序列化/解析
+├── history.test.mjs           # 6 用例：历史去重/上限/删除/时间格式化
 ├── check-json5.mjs            # json5 解析
 ├── check-resources.mjs        # 资源引用一致性
 └── check-structure.mjs        # 导入符号 / ForEach / TAG 声明 / @ObjectLink 传参 / HTML 结构

@@ -68,3 +68,16 @@
 41. 验证：`node --test` 14 pass / 0 fail；`check-json5` 8 个通过；`check-resources` 20 个源文件 70 处引用；`check-structure` 20 文件 28 导入 / 6 ForEach / 7 TAG / 5 个 @ObjectLink 组件 7 处调用 / 4 HTML。
 42. 文档：README.md 补使用说明 11–12 条、文件地图 4 个新文件、具体实现两组小节；HANDOFF.md 增第五轮小节与踩坑 24–27、验证基线更新；新增 `.claude/context-summary-find-bookmark.md` 与 `.claude/verification-report-find-bookmark.md`（自评 94 分）。
 43. 提交 `edd5171`（14 文件 +861/−9），推送遇阻：`github.com:443` 四次连接超时（21s），而 `ssh.github.com:443` 可达 → 改用 `git push ssh://git@ssh.github.com:443/DuXingLang/OHBrowser.git master` 成功，`git ls-remote` 确认远端 master 与本地 HEAD 一致；据此补 HANDOFF 踩坑 28（不改 origin）。
+
+### 第六轮：window.open 新页签 + 历史记录
+44. 文档核对（`.git/dsh-docs/web-attr.md`）：`onWindowNew`(5358-5436) 里**必须** `event.handler.setWebController(controller)` 否则渲染进程阻塞、不建窗口传 `null`；`OnWindowNewEvent`(10209) 字段 `isAlert/isUserTrigger/targetUrl/handler`；`ControllerHandler.setWebController`(7303-7315)；`onWindowExit`(5437-5471)；`allowWindowOpenMethod`(1719-1744) 默认 false 且受系统属性 `persist.web.allowWindowOpenMethod.enabled` 控制，不开则 JS `window.open` 被静默拦截。
+45. 修复旧实现 bug：原来把 `event.targetUrl` `loadUrl` 到当前页签并 `setWebController(null)`，会顶掉当前页面、且 popup 的 `document.write` 内容丢失。
+46. `Browser.ets`：`WebKey` 增 `blank` 字段（构造加第 4 参默认 false），`openTabForWindow(targetUrl)`（上限 toast「页签数量已满」返回 null；否则 push + `WebKey(..., NEW_TAB_TITLE='新页签', true)` + setTimeout(50) changeIndex/updateHistoryState），`indexOfTimestamp(timestamp)`（关闭后 key 重编号，用 timestamp 反查）。
+47. `TitleBar.ets`（WebTab）：blank 页签 `src` 留空（参照官方 sample）；新增 `.allowWindowOpenMethod(true)`；onWindowNew 新实现（null → setWebController(null)，否则 setWebController(created.controller)）；新增 `.onWindowExit`（indexOfTimestamp → deleteTab）。
+48. 历史记录：`HistoryList.ts`（纯函数，不 import 任何模块）：`HistoryEntry` 接口、`HISTORY_MAX_COUNT=200`、`addHistory`（同址去重提到最前、超限丢最旧、空 URL 忽略）、`removeHistory`、`formatHistoryTime`（月-日 时:分）。原因：Node ESM 要求导入带扩展名而 ArkTS 省略扩展名，曾报 `ERR_MODULE_NOT_FOUND`，宁可零依赖也不引 loader hook；序列化/解析/标题兜底复用 `BookmarkList`。
+49. `HistoryStore.ets`（@Observed）：`items`/`visible`、`init`（读 Key `history`，`parseBookmarks(...).slice(0, HISTORY_MAX_COUNT)`）、`add`/`remove`/`clear`、`persist`（`putSync` + `flush()`）。与书签共用 `browser_store` 首选项实例，避免清除数据漏清。
+50. `HistoryPanel.ets`（新增）：与 `BookmarkPanel` 同构——标题「历史记录」+「清空」（空时置灰）+ 收起按钮；列表行标题/域名兜底 + 地址 + 访问时间，整行点击 `loadUrl` 并收起，右侧删除按钮；`constraintSize({ maxHeight: 320 })` 内部滚动。
+51. 接线：`Browser.ets` 增 `historyStore`/`initHistory`/`openHistory`（先 `closeFindBar` + `closeBookmarks`）/`closeHistory`/`recordHistory(url, title)`（仅 http 开头，标题随页取）；`clearBrowsingData()` 增 `historyStore.clear()`；`TitleBar.ets` `onPageEnd` 调 `recordHistory(event.url, pageTitle)`；`MoreMenu.ets` 增「历史记录」；`Index.ets` 增 `loadStores()`（initBookmarks + initHistory）并在 `aboutToAppear`/`onDeviceChange` 调用、渲染 `HistoryPanel`。
+52. 单测：新增 `tests/history.test.mjs` 6 用例（追加置顶、同址去重且更新为最新、空 URL 忽略、超上限丢最旧、删除、时间格式化），`node --test` 合计 20 pass。
+53. 验证：`node --test` 20 pass / 0 fail；`check-json5` 8 个通过；`check-resources` 23 个源文件 83 处引用；`check-structure` 23 文件 38 导入 / 7 ForEach / 8 TAG / 6 个 @ObjectLink 组件 8 处调用 / 4 HTML。中途发现 HistoryStore 误导入已删除的 `parseHistory`/`stringifyHistory`，改为复用 `parseBookmarks`/`stringifyBookmarks`。
+54. 文档：README.md 补使用说明 13 条、文件地图（HistoryPanel/HistoryList/HistoryStore/history.test）、具体实现历史记录小节；HANDOFF.md 增第六轮小节与待真机确认项、验证基线更新、文件地图更新。

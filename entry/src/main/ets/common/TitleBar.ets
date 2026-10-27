@@ -376,7 +376,8 @@ export struct WebTab {
       ForEach(this.browser.webArray, (item: WebKey, index: number) => {
         TabContent() {
           Web({
-            src: this.homeIsPhone ? $rawfile('phone.html') : $rawfile('pad.html'),
+            // window.open / target=_blank 承接页签不加载首页，等 Web 内核把目标内容送进来
+            src: item.blank ? '' : (this.homeIsPhone ? $rawfile('phone.html') : $rawfile('pad.html')),
             controller: this.browser?.webControllerArray[item.key]?.controller
           })
             .javaScriptAccess(true)
@@ -384,6 +385,8 @@ export struct WebTab {
             .domStorageAccess(true)
             .mixedMode(MixedMode.All)
             .multiWindowAccess(true)
+            // 允许 JS 自动开窗（默认受系统属性控制为 false），否则 window.open 被静默拦截
+            .allowWindowOpenMethod(true)
             .zoomAccess(true)
             // 长页面始终显示滚动条，便于用户在触屏上判断当前位置
             .verticalScrollBarAccess(true)
@@ -393,11 +396,27 @@ export struct WebTab {
             .darkMode(this.settings.forceDark ? webview.WebDarkMode.On : webview.WebDarkMode.Auto)
             .forceDarkAccess(this.settings.forceDark)
             .onWindowNew((event) => {
-              Logger.info(TAG, `onWindowNew targetUrl: ` + event.targetUrl);
-              if (event.targetUrl !== 'about:blank' && event.targetUrl !== '') {
-                this.browser?.webControllerArray[item.key]?.controller.loadUrl(event.targetUrl);
+              Logger.info(TAG, `onWindowNew targetUrl: ${event?.targetUrl} isUserTrigger= ${event?.isUserTrigger}`);
+              if (event === undefined) {
+                return;
               }
-              event.handler.setWebController(null);
+              // 新窗口用新页签承接，把该页签的 controller 交给内核加载。
+              // 必须在回调里调用 setWebController（拒绝时传 null），否则渲染进程会一直阻塞。
+              const created = this.browser.openTabForWindow(event.targetUrl);
+              if (created === null) {
+                // 拒绝创建（页签已满）：必须回传 null，通知内核不再等待新窗口
+                event.handler.setWebController(null);
+                return;
+              }
+              event.handler.setWebController(created.controller);
+            })
+            .onWindowExit(() => {
+              // 网页调用 window.close()：关掉承载它的页签
+              const index = this.browser.indexOfTimestamp(item.timestamp);
+              Logger.info(TAG, `onWindowExit item.key= ${item.key} index= ${index}`);
+              if (index >= 0) {
+                this.browser.deleteTab(index);
+              }
             })
             .onPageBegin((event) => {
               Logger.info(TAG, `onPageBegin= ${JSON.stringify(event)}`)
@@ -419,8 +438,11 @@ export struct WebTab {
                 this.registerFunc(this.browser.webControllerArray[item.key]);
                 // 用实际页面标题更新页签显示，空标题回退为“主页”
                 try {
-                  this.browser.setTabTitle(item.key,
-                    this.browser.webControllerArray[item.key]?.controller?.getTitle() ?? '');
+                  const pageTitle: string =
+                    this.browser.webControllerArray[item.key]?.controller?.getTitle() ?? '';
+                  this.browser.setTabTitle(item.key, pageTitle);
+                  // 访问历史在页面加载完成时写入，标题随页面一起取，避免记到“新页签”
+                  this.browser.recordHistory(event.url, pageTitle);
                 } catch (error) {
                   Logger.error(TAG, `getTitle failed: ${JSON.stringify(error)}`);
                 }

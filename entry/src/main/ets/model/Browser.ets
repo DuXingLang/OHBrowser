@@ -20,6 +20,8 @@ import common from '@ohos.app.ability.common';
 import { formatUrl } from './UrlFormatter';
 import { Bookmark, normalizeTitle } from './BookmarkList';
 import { BookmarkStore } from './BookmarkStore';
+import { HistoryEntry } from './HistoryList';
+import { HistoryStore } from './HistoryStore';
 
 export { formatUrl };
 
@@ -41,11 +43,15 @@ export class WebKey {
   title: string;
   // 页签图标：由 Web 组件的 onFaviconReceived 事件更新；未收到时页签回退为内置导航图标
   favicon: image.PixelMap | undefined = undefined;
+  // 是否为“承接 window.open/target=_blank 的新窗口”页签：这类页签不加载本地首页，
+  // 由 Web 内核通过 setWebController 直接接管加载，src 必须留空，否则会顶掉内核的跳转
+  blank: boolean = false;
 
-  constructor(key: number, timestamp: number, title: string = '主页') {
+  constructor(key: number, timestamp: number, title: string = '主页', blank: boolean = false) {
     this.key = key
     this.timestamp = timestamp
     this.title = title
+    this.blank = blank
   }
 }
 
@@ -90,6 +96,8 @@ const MAX_TAB_COUNT: number = 10
 const TAB_SWITCH_DELAY: number = 50
 // 页签标题为空时的兜底文案
 const DEFAULT_TAB_TITLE: string = '主页'
+// 承接新窗口的页签在拿到真实标题前的占位文案
+const NEW_TAB_TITLE: string = '新页签'
 // 网页缩放：单次缩放步长与上下限（WebviewController.zoom 的入参是相对当前比例的倍数）
 const ZOOM_STEP: number = 1.25
 const MIN_ZOOM: number = 0.5
@@ -161,6 +169,46 @@ export class Browser {
       this.tabsController.changeIndex(this.tabArrayIndex)
       this.updateHistoryState()
     }, TAB_SWITCH_DELAY)
+  }
+
+  /**
+   * 为 window.open / target=_blank 请求新建页签，并把该页签的 controller 交给 Web 内核接管。
+   *
+   * 用新页签而不是在当前页签里 loadUrl：后者会把用户正在看的页面顶掉，
+   * 且 JS 先 open('about:blank') 再 document.write 的 popup 内容会整段丢失。
+   * 返回 null 表示拒绝创建（达到页签上限），调用方需把 null 传给 setWebController，
+   * 否则 Web 内核会一直等这个新窗口、渲染进程阻塞。
+   */
+  openTabForWindow(targetUrl: string): WebObject | null {
+    if (this.webArray.length >= MAX_TAB_COUNT) {
+      promptAction.showToast({
+        message: '页签数量已满'
+      });
+      return null;
+    }
+    let webController: webview.WebviewController = new webview.WebviewController();
+    let object = new WebObject(webController, false)
+    this.webControllerArray.push(object)
+    // blank 页签的 Web src 留空，由内核接管加载；标题先占位，onPageEnd 会换成真实标题
+    this.webArray.push(new WebKey(this.webArray.length, new Date().getTime(), NEW_TAB_TITLE, true))
+    this.tabArrayIndex = this.webArray.length - 1
+    Logger.info(TAG, `open window tab index= ${this.tabArrayIndex} targetUrl= ${targetUrl}`)
+    setTimeout(() => {
+      this.tabsController.changeIndex(this.tabArrayIndex)
+      this.updateHistoryState()
+    }, TAB_SWITCH_DELAY)
+    return object
+  }
+
+  // 关闭页签后 key 会重新编号，组件里缓存的 key 可能已过期；
+  // 页签的 timestamp 创建后不变，用它反查当前下标更可靠
+  indexOfTimestamp(timestamp: number): number {
+    for (let i = 0; i < this.webArray.length; ++i) {
+      if (this.webArray[i].timestamp === timestamp) {
+        return i;
+      }
+    }
+    return -1;
   }
 
   setTabArrayIndex(tabArrayIndex: number) {
@@ -348,6 +396,8 @@ export class Browser {
     } catch (error) {
       Logger.error(TAG, `deleteAllData failed: ${JSON.stringify(error)}`);
     }
+    // 应用自己维护的访问历史一并清理，否则「清除浏览数据」后历史面板仍有残留
+    this.historyStore.clear();
     promptAction.showToast({ message: '已清除浏览数据' });
   }
 
@@ -526,5 +576,37 @@ export class Browser {
     const exists: boolean = this.bookmarkStore.has(url);
     this.bookmarkStore.add(bookmark);
     promptAction.showToast({ message: exists ? '已更新该书签' : '已添加到书签' });
+  }
+
+  // 历史记录状态与持久化，与书签共用首选项实例
+  historyStore: HistoryStore = new HistoryStore()
+
+  // 首次进入页面时加载已保存的历史记录
+  initHistory(context: common.Context) {
+    this.historyStore.init(context);
+  }
+
+  // 展开历史面板；与查找栏、书签面板互斥
+  openHistory() {
+    this.closeFindBar();
+    this.closeBookmarks();
+    this.historyStore.visible = true;
+  }
+
+  closeHistory() {
+    this.historyStore.visible = false;
+  }
+
+  // 页面加载完成时记录一次访问：本地首页与 about:blank 等非网页地址不记录
+  recordHistory(url: string, title: string) {
+    if (!url.startsWith('http')) {
+      return;
+    }
+    const entry: HistoryEntry = {
+      title: normalizeTitle(title, url),
+      url: url,
+      time: new Date().getTime()
+    };
+    this.historyStore.add(entry);
   }
 }

@@ -20,6 +20,7 @@ import { PhoneHeader, PhoneToolBar } from '../common/PhoneLayout';
 import { TabletTitle, BrowserTabs, WebTab } from '../common/TitleBar';
 import { FindBar } from '../common/FindBar';
 import { BookmarkPanel } from '../common/BookmarkPanel';
+import { HistoryPanel } from '../common/HistoryPanel';
 
 const TAG: string = '[browser.Index]';
 // 布局断点：窗口宽度小于 600vp 用手机单页签布局，否则用多页签布局
@@ -47,15 +48,20 @@ struct Index {
   onDeviceChange() {
     Logger.info(TAG, `onDeviceChange`);
     this.browser = new Browser();
-    this.loadBookmarks();
+    this.loadStores();
   }
 
-  // 书签需要 Context 才能访问首选项，集中在这里初始化，避免 UI 组件各自持有 Context
-  loadBookmarks() {
+  // 书签与历史都需要 Context 才能访问首选项，集中在这里初始化，避免 UI 组件各自持有 Context
+  loadStores() {
     try {
       this.browser.initBookmarks(getContext(this));
     } catch (e) {
       Logger.error(TAG, `initBookmarks failed: ${JSON.stringify(e)}`);
+    }
+    try {
+      this.browser.initHistory(getContext(this));
+    } catch (e) {
+      Logger.error(TAG, `initHistory failed: ${JSON.stringify(e)}`);
     }
   }
 
@@ -87,7 +93,7 @@ struct Index {
       this.homeIsPhone = false;
     }
     Logger.info(TAG, `homeIsPhone = ${this.homeIsPhone}`);
-    this.loadBookmarks();
+    this.loadStores();
   }
 
   aboutToDisappear() {
@@ -118,6 +124,10 @@ struct Index {
       // 书签面板与查找栏同级，展开时同样是独立横条
       if (!this.webFullScreen && this.browser.bookmarkStore.visible) {
         BookmarkPanel({ browser: $browser, bookmarks: this.browser.bookmarkStore })
+      }
+      // 历史记录面板同样与查找栏同级
+      if (!this.webFullScreen && this.browser.historyStore.visible) {
+        HistoryPanel({ browser: $browser, history: this.browser.historyStore })
       }
       // WebTab 常驻组件树：横竖屏切换仅切换标题栏/工具栏，Web 不销毁，浏览状态不丢失
       WebTab({

@@ -22,6 +22,7 @@
 10. 页签会显示站点图标（取不到时回退为内置图标），主文档 4xx/5xx 与渲染进程异常会给出提示;
 11. 「更多」菜单的「在页面中查找」会在标题栏下方展开查找条，输入关键字实时高亮，显示 `当前/总数`，可上一个/下一个跳转，关闭时清除高亮;
 12. 「更多」菜单的「收藏当前页」把当前网址存入书签，「书签」展开书签面板可点击跳转或删除；书签通过首选项持久化，重启应用后仍在（本地首页等非 http 页面不可收藏）。
+13. 「更多」菜单的「历史记录」展开历史面板，展示最近访问记录（上限 200 条，同址去重、最近在前），可点击跳转、单条删除或一键清空；历史同样通过首选项持久化，「清除浏览数据」会一并清空。
 
 ### 工程目录
 ```
@@ -36,15 +37,19 @@ entry/src/main/ets/
 |   |---MoreMenu.ets                            // 「更多」菜单（缩放/桌面版/深色/缓存/清除数据/查找/书签）
 |   |---FindBar.ets                             // 页面内查找条（上一个/下一个/匹配计数）
 |   |---BookmarkPanel.ets                       // 书签面板（收藏当前页/跳转/删除）
+|   |---HistoryPanel.ets                       // 历史记录面板（跳转/删除/清空）
 |---model
 |   |---Logger.ts                               // 日志工具
 |   |---Browser.ets                             // 浏览器实例
 |   |---UrlFormatter.ts                         // 地址栏输入归一化（纯函数）
 |   |---BookmarkList.ts                         // 书签序列化与解析（纯函数）
 |   |---BookmarkStore.ets                       // 书签状态与首选项持久化
+|   |---HistoryList.ts                          // 历史记录纯函数（去重/上限/时间格式化）
+|   |---HistoryStore.ets                        // 历史状态与首选项持久化
 tests/
 |---formatUrl.test.mjs                          // 单元测试（node --test）
 |---bookmark.test.mjs                           // 书签序列化单元测试
+|---history.test.mjs                             // 历史记录单元测试
 |---check-json5.mjs                             // 静态检查：json5 配置可解析
 |---check-resources.mjs                         // 静态检查：$r/$rawfile 与配置资源引用均已定义
 |---check-structure.mjs                         // 静态检查：导入符号、ForEach 三参数、TAG 声明、@ObjectLink 传参、rawfile HTML 结构
@@ -81,6 +86,10 @@ tests/
   + 序列化与解析抽成纯函数（`parseBookmarks`/`stringifyBookmarks`），可用 `node --test` 直接覆盖，异常输入一律返回空列表而不是抛错;
   + 持久化用 `preferences.getPreferencesSync(context, { name: 'browser_store' })` + `putSync`/`getSync`，写入后 `flush()` 异步落盘（API 12 没有 `flushSync`）;
   + 书签状态放在 `@Observed BookmarkStore` 上，面板用 @ObjectLink 绑定，收藏/删除后列表精确刷新;
++ 历史记录：源码参考[HistoryStore.ets](entry/src/main/ets/model/HistoryStore.ets)与[HistoryList.ts](entry/src/main/ets/model/HistoryList.ts)
+  + 页面加载完成（`onPageEnd`）时把当前地址与标题记入历史，`recordHistory` 只接受 http 页面，本地首页与 about:blank 不入库;
+  + 纯函数 `addHistory` 同址去重并提到最前，上限 `HISTORY_MAX_COUNT=200`，超出丢弃最旧；序列化/解析/标题兜底复用书签的实现（结构一致），因此 `HistoryList.ts` 不 import 任何模块、可被 `node --test` 直接加载;
+  + 历史状态放在 `@Observed HistoryStore` 上，面板用 @ObjectLink 绑定；`clearBrowsingData()` 会一并调用 `historyStore.clear()`，避免「清除浏览数据」后历史面板仍有残留;
 
 ### 相关权限
 

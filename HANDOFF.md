@@ -1,7 +1,7 @@
 # HANDOFF — OpenHarmony Browser 示例优化（会话交接）
 
 > 写给零上下文的新会话。接手前请通读本文，尤其是最后的“踩坑清单”。
-> 更新时间：2026-10-27 17:05 · 工作目录 `D:\project\Browser` · Git 流程：`2056c72`（原版）→ `164919b`（第一轮优化）→ 第二轮及以后见最新 commit
+> 更新时间：2026-10-27 17:35 · 工作目录 `D:\project\Browser` · Git 流程：`2056c72`（原版）→ `164919b`（第一轮）→ `90d35e7`（第二轮）→ `5e6ccb5`（第三轮）→ `45cff8e`（第四轮）→ `edd5171`（第五轮）→ `5c51869`（第六轮，最新，已推送）
 
 ---
 
@@ -23,9 +23,16 @@
 - 第三轮（本轮）：修复新增页签崩溃（17100001）、顶栏按 Chrome 风格重做（页签条 + 药丸地址栏 + 圆形按钮）、删除与 oh-package.json5 冲突的根目录 package.json、首页新增百度快捷入口。
 - 第四轮（`45cff8e`，已推送）：按 OpenHarmony 5.0.3 官方 ArkWeb 文档补齐能力（缩放 / 桌面版 UA / 强制深色 / 缓存策略 / 清除浏览数据 / 下载 / 页签图标 / 网页全屏 / HTTP 与渲染异常提示），顺带修复 `PhoneLayout.ets` 使用未声明 `TAG` 的编译级缺陷，并给静态检查器加了 TAG 与 @ObjectLink 传参两类规则。
 - 第五轮（`edd5171`，已推送）：页面内查找（`searchAllAsync`/`searchNext`/`clearMatches` + `onSearchResultReceive`）与书签（纯函数序列化 + preferences 持久化 + 面板），补 7 个书签单测。
-- 第六轮（当前工作区未提交）：`window.open` 新页签支持（`onWindowNew`/`onWindowExit` + `allowWindowOpenMethod`）与历史记录（纯函数去重/上限 + preferences 持久化 + 面板），补 6 个历史单测。
+- 第六轮（`5c51869`，已推送）：`window.open` 新页签支持（`onWindowNew`/`onWindowExit` + `allowWindowOpenMethod`）与历史记录（纯函数去重/上限 + preferences 持久化 + 面板），补 6 个历史单测。
 
-## 三、验证怎么跑（本机可跑，无需 SDK）
+**本轮（第七轮，会话收尾）**：仅更新本交接文档使其与实际提交一致，无代码改动。
+
+## 三、当前卡在哪（环境限制，非代码问题）
+
+- **卡点只有一个**：本机没有 DevEco Studio / OpenHarmony SDK / hvigorw，**无法编译 ArkTS、无法真机运行**。因此所有 ArkTS 改动都只能靠「Node 单测 + 三项静态检查 + 人工审查」保证，编译级错误与真机行为要到有 SDK 的环境复核。
+- 无阻塞性技术问题；六轮功能均已提交并推送到 GitHub 远端。
+
+## 四、验证怎么跑（本机可跑，无需 SDK）
 
 ```bash
 node --test                     # 单元测试：20 用例（formatUrl 7 + 书签 7 + 历史 6）
@@ -43,7 +50,7 @@ node tests/check-resources.mjs → 23 个源文件 83 处源码资源引用、4 
 node tests/check-structure.mjs → 23 个源文件 38 处相对导入、7 处 ForEach、8 处 TAG 声明、6 个 @ObjectLink 组件 8 处调用、4 个 HTML 全部符合约束
 ```
 
-## 四、本轮关键改动（含“为什么”）
+## 五、本轮关键改动（含“为什么”）
 
 ### 静态测试层（新增，替代不可用的编译器）
 - `tests/check-resources.mjs`：把所有 `$r('app.type.name')`、`$rawfile('x')`、json5 里的 `$string:/$media:/$color:/$profile:` 与 base/dark/en_US/rawfile 实际定义逐条比对。**它抓出了编译必失败的资源缺失**。
@@ -120,7 +127,7 @@ node tests/check-structure.mjs → 23 个源文件 38 处相对导入、7 处 Fo
 - **面板 `HistoryPanel.ets`**：与 `BookmarkPanel` 同构（标题「历史记录」+「清空」（无记录时置灰）+ 关闭按钮；列表行显示标题/域名兜底 + 地址 + 访问时间，整行点击跳转、右侧删除按钮），`constraintSize({ maxHeight: 320 })` 内部滚动。
 - **6 个历史单测**：`tests/history.test.mjs`（追加置顶、同址去重且更新为最新、空 URL 忽略、超上限丢最旧、删除、时间格式化）。
 
-## 五、未闭环（环境限制，非代码问题）
+## 六、未闭环（环境限制，非代码问题）
 
 - 本机无 DevEco Studio / OpenHarmony SDK / hvigorw，**未做编译与真机运行验证**。换有 DevEco 5.0+ 的环境执行 `hvigorw assembleHap` 复核 ArkTS 严格模式告警。
 - 真机手测清单：手机竖屏/横屏各走一遍新增页签→切换→关闭→旋转；平板上限 10 页签；深色模式下首页与网页配色；无历史时按返回键应退出应用。
@@ -128,7 +135,7 @@ node tests/check-structure.mjs → 23 个源文件 38 处相对导入、7 处 Fo
 - 第五轮待真机确认项：查找条对中文关键字的匹配计数、跨页面跳转后计数是否归零、书签面板在小屏（<600vp）与横屏下的高度与滚动、重启应用后书签是否仍在（`flush()` 是否真正落盘）、同一网址重复收藏是否只剩一条。
 - 第六轮待真机确认项：`window.open` 弹出的新页签能否在 10 页签上限时正确拒绝、`onWindowExit`（网页 `window.close()`）后页签是否关闭、历史面板在手机横屏/小屏下的高度与滚动、重启应用后历史是否仍在、`clearBrowsingData` 是否同时清空历史。
 
-## 六、踩过的坑（绝对不要再踩）
+## 七、踩过的坑（绝对不要再踩）
 
 1. **PowerShell 执行策略拦 npm 脚本**：`npm test` 可能报 UnauthorizedAccess。用 `node --test` / `node tests/xxx.mjs` 直跑。
 2. **`node --test tests/` 在 Windows 上把目录当模块加载报 MODULE_NOT_FOUND**：用 `node --test`（无参）或指定文件。
@@ -158,8 +165,10 @@ node tests/check-structure.mjs → 23 个源文件 38 处相对导入、7 处 Fo
 26. **书签面板别插在 Web 上面覆盖**：用兄弟节点（固定高度、内部 List 滚动）而不是 overlay，避免盖住网页且不触发重载。
 27. **`constraintSize({ maxHeight })` 比写死 height 好**：书签少时不留大片空白，多时到上限才滚。
 28. **本机 `github.com:443` 被阻断时改用 SSH 443 推送**：`Test-NetConnection github.com -Port 443` 为 False，但 `ssh.github.com:443`、`codeload.github.com:443` 可达（本机已有 `~/.ssh/id_ed25519`，认证身份 DuXingLang）。一次性推送命令：`git push ssh://git@ssh.github.com:443/DuXingLang/OHBrowser.git master`，不要为此改 `origin`。注意 PowerShell 把 git 的 stderr 当错误，输出 `master -> master` 却报 exit 1 属正常。
+29. **提交信息文件每次用新文件名**：`write` 到 `D:\project\Browser\.git\dsh-msg-*.txt` 且旧名已被删除时，会报 “file no longer exists — re-read the file, then retry”。改成带轮次后缀（如 `.git\dsh-msg-window-history.txt`），提交后 `Remove-Item` 删除；`git add` **不要用 `-A`**（会把消息文件纳入暂存），改显式列路径。
+30. **PowerShell 直跑 Node 的 `node --test tests/` 会 MODULE_NOT_FOUND**（把目录当模块），要用 `node --test`（无参）或指定文件；`node --import` 不参与（无 loader hook）。
 
-## 七、关键文件地图
+## 八、关键文件地图
 
 ```
 entry/src/main/ets/
@@ -196,13 +205,16 @@ tests/
 ├── context-summary-webview-api.md          # 第四轮上下文摘要
 ├── context-summary-find-bookmark.md        # 第五轮（查找 + 书签）
 ├── verification-report-find-bookmark.md    # 第五轮，自评 94 分
+├── context-summary-window-history.md       # 第六轮（window.open + 历史）
+├── verification-report-window-history.md   # 第六轮，自评 94 分
 ├── context-summary-browser-optimization.md # 第一轮
 ├── verification-report-browser-optimization.md
 └── operations-log.md          # 各轮流水
 ```
 
-## 八、环境备忘
+## 九、环境备忘
 
 - 工作目录 `D:\project\Browser`；分支 master；Node v25.2.1（支持 TS 直跑）。
 - 无 DevEco Studio / OpenHarmony SDK / hvigorw：ArkTS 层改动只能靠静态检查 + 人工审查。
 - CLAUDE.md 要求：中文交付、修改前先读文件、`.claude/` 三件套、自评 ≥90 通过。
+- **推送**：`git push ssh://git@ssh.github.com:443/DuXingLang/OHBrowser.git master`（`github.com:443` 在本机被阻断；`origin` 仍为 https 地址，勿改）。提交信息用 `write` 到 `.git/dsh-msg-<轮次>.txt` 再 `git commit -F`，提交后删除该文件。

@@ -140,6 +140,7 @@ node tests/check-structure.mjs → 20 个源文件 28 处相对导入、6 处 Fo
 25. **`activeMatchOrdinal` 从 0 开始**：直接显示会得到「0/5」，必须 +1。
 26. **书签面板别插在 Web 上面覆盖**：用兄弟节点（固定高度、内部 List 滚动）而不是 overlay，避免盖住网页且不触发重载。
 27. **`constraintSize({ maxHeight })` 比写死 height 好**：书签少时不留大片空白，多时到上限才滚。
+28. **本机 `github.com:443` 被阻断时改用 SSH 443 推送**：`Test-NetConnection github.com -Port 443` 为 False，但 `ssh.github.com:443`、`codeload.github.com:443` 可达（本机已有 `~/.ssh/id_ed25519`，认证身份 DuXingLang）。一次性推送命令：`git push ssh://git@ssh.github.com:443/DuXingLang/OHBrowser.git master`，不要为此改 `origin`。注意 PowerShell 把 git 的 stderr 当错误，输出 `master -> master` 却报 exit 1 属正常。
 
 ## 七、关键文件地图
 

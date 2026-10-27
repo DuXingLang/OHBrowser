@@ -67,3 +67,4 @@
 40. 单测：新增 `tests/bookmark.test.mjs` 7 用例（追加置顶、同 URL 去重、超上限丢最旧、删除、标题兜底域名、脏数据丢弃、序列化往返），`node --test` 合计 14 pass。
 41. 验证：`node --test` 14 pass / 0 fail；`check-json5` 8 个通过；`check-resources` 20 个源文件 70 处引用；`check-structure` 20 文件 28 导入 / 6 ForEach / 7 TAG / 5 个 @ObjectLink 组件 7 处调用 / 4 HTML。
 42. 文档：README.md 补使用说明 11–12 条、文件地图 4 个新文件、具体实现两组小节；HANDOFF.md 增第五轮小节与踩坑 24–27、验证基线更新；新增 `.claude/context-summary-find-bookmark.md` 与 `.claude/verification-report-find-bookmark.md`（自评 94 分）。
+43. 提交 `edd5171`（14 文件 +861/−9），推送遇阻：`github.com:443` 四次连接超时（21s），而 `ssh.github.com:443` 可达 → 改用 `git push ssh://git@ssh.github.com:443/DuXingLang/OHBrowser.git master` 成功，`git ls-remote` 确认远端 master 与本地 HEAD 一致；据此补 HANDOFF 踩坑 28（不改 origin）。

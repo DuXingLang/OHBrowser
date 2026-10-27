@@ -42,3 +42,15 @@
 19. 删除根目录 package.json（与 oh-package.json5 重复导致无法编译打包），Node 测试改直接执行；README/HANDOFF 验证命令同步。
 20. phone.html / pad.html 站点数组首位新增百度快捷入口（baidu.com，使用已有 baidu.png）。
 21. 验证：node --test 7 pass；check-json5 8 文件通过；check-resources 46 处引用命中；check-structure 15 导入/5 ForEach/4 HTML 通过。
+
+### 第四轮：按 OpenHarmony 5.0.3 ArkWeb 官方文档补功能
+22. 文档获取：`docs.openharmony.cn` 的 v5.0.3 页面 404，改用 gitee `OpenHarmony-5.0.3-Release` 分支的 `js-apis-webview.md` 与 `ts-basic-components-web.md`，逐条核对签名后再实现，避免臆造接口。
+23. 发现并修复编译/运行级缺陷：`PhoneLayout.ets` 的 `Logger.error(TAG, ...)` 使用未声明 `TAG` → 补常量；`check-structure.mjs` 新增「TAG 必须本文件声明」规则。
+24. 新增 `WebSettings(@Observed)`：desktopMode/forceDark/noCache/zoomScale/isFullScreen 集中在 @Observed 对象上，Web 属性与菜单文案用 `@ObjectLink` 绑定（`Browser` 非 @Observed，标量直接挂它不会刷新）。
+25. `Browser.ets` 新增能力：`zoomIn/zoomOut/resetZoom`（zoom 相对倍数换算，0.5–4 倍）、`toggleDesktopMode`（getUserAgent 备份 + setCustomUserAgent）、`toggleForceDark`（darkMode + forceDarkAccess）、`toggleNoCache`（cacheMode）、`clearBrowsingData`（clearHistory + clearAllCookiesSync + WebStorage.deleteAllData，各自 try/catch）、`attachDownloadDelegate`/`WebDownloadDelegate`（onBeforeDownload 里 `item.start(沙箱 Download 路径)`）、`setTabFavicon`、`enterFullScreen`/`exitFullScreen`、`handleHttpError`/`handleRenderExit`。
+26. `TitleBar.ets`：Web 组件绑定 `cacheMode`/`darkMode`/`forceDarkAccess`，新增 `onControllerAttached`（挂下载委托）、`onFaviconReceived`、`onFullScreenEnter/Exit`、`onHttpErrorReceive`、`onRenderExited`；TabItem 显示 favicon 并回退内置图标；平板工具栏加「更多」入口。
+27. `PhoneLayout.ets`：手机工具栏 5 键改 6 键（新增「更多」），`Column().layoutWeight(1)` 均分，`MoreMenuButton` 复用。
+28. `Index.ets`：新增 `webFullScreen`，全屏时隐藏标题栏/工具栏；`onBackPress` 优先退出网页全屏。
+29. 新增 `entry/src/main/ets/common/MoreMenu.ets`（105 行）：`bindMenu(MenuElement[])` 8 项入口（新建页签/放大/缩小/缩放重置/桌面版/深色/缓存/清除数据），文案随 `settings` 变化。
+30. 验证：node --test 7 pass；check-json5 8 通过；check-resources 16 文件 48 处；check-structure 16 文件 18 导入/5 ForEach/6 TAG/3 @ObjectLink 组件 5 处调用/4 HTML。
+31. 文档：README.md 补扩展能力小节与文件地图，HANDOFF.md 增第四轮说明与 5 条新踩坑（TAG/@ObjectLink/Browser 非 Observed/下载需 start/zoom 相对倍数），新增 `.claude/context-summary-webview-api.md` 与 `.claude/verification-report-webview-api.md`（自评 93 分）。

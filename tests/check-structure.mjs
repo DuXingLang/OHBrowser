@@ -277,6 +277,91 @@ for (const name of htmlFiles) {
   }
 }
 
+// ---------- 4) ArkTS 常量与自定义组件参数校验 ----------
+
+// 4.1 使用 TAG 打日志但未声明的文件：运行到该行会拿到 undefined，编译期不报错
+let tagFiles = 0;
+for (const file of sources) {
+  const text = readFileSync(file, 'utf8');
+  if (!/(?:\(|,)\s*TAG\b/.test(text)) {
+    continue;
+  }
+  tagFiles++;
+  if (!/(?:const|let|var)\s+TAG\b/.test(text)) {
+    fail(`${rel(file)}: 使用了 TAG 但未声明（应补 const TAG: string = '[模块名]';）`);
+  }
+}
+
+// 4.2 @ObjectLink 成员必须由父组件传参：漏传会在运行时抛“ObjectLink must be initialized”
+function structBlocks(text) {
+  const lines = text.split('\n');
+  const blocks = [];
+  for (let i = 0; i < lines.length; i++) {
+    const m = lines[i].match(/(?:export\s+)?struct\s+([A-Za-z_$][\w$]*)/);
+    if (!m) {
+      continue;
+    }
+    const body = [];
+    let j = i;
+    for (; j < lines.length; j++) {
+      body.push(j === i ? lines[j] : lines[j]);
+      if (j > i && /^\}/.test(lines[j])) {
+        break;
+      }
+    }
+    blocks.push({ name: m[1], body: body.join('\n'), line: i + 1 });
+    i = j;
+  }
+  return blocks;
+}
+
+/** 从 `{` 起始处取出配对的 `{...}` 文本 */
+function takeBraces(text, openIndex) {
+  let depth = 0;
+  for (let i = openIndex; i < text.length; i++) {
+    if (text[i] === '{') {
+      depth++;
+    } else if (text[i] === '}') {
+      depth--;
+      if (depth === 0) {
+        return text.slice(openIndex, i + 1);
+      }
+    }
+  }
+  return text.slice(openIndex);
+}
+
+const objectLinkProps = new Map();
+for (const file of sources) {
+  const text = readFileSync(file, 'utf8');
+  if (!text.includes('@ObjectLink')) {
+    continue;
+  }
+  for (const block of structBlocks(text)) {
+    const names = [...block.body.matchAll(/@ObjectLink\s+([A-Za-z_$][\w$]*)\s*:/g)].map((m) => m[1]);
+    if (names.length > 0) {
+      objectLinkProps.set(block.name, { props: names, file: rel(file) });
+    }
+  }
+}
+
+let componentCallCount = 0;
+for (const file of sources) {
+  const text = readFileSync(file, 'utf8');
+  for (const [name, info] of objectLinkProps) {
+    for (const m of text.matchAll(new RegExp(`\\b${name}\\s*\\(\\s*\\{`, 'g'))) {
+      const openIndex = m.index + m[0].length - 1;
+      const argText = takeBraces(text, openIndex);
+      componentCallCount++;
+      for (const prop of info.props) {
+        if (!new RegExp(`\\b${prop}\\s*:`).test(argText)) {
+          fail(`${rel(file)}:${lineOf(text, m.index)} ${name} 缺少 @ObjectLink 参数 ${prop}（定义在 ${info.file}）`);
+        }
+      }
+    }
+  }
+}
+
 if (problems.length > 0) {
   console.error(`[check-structure] 发现 ${problems.length} 处结构问题：`);
   for (const p of problems) {
@@ -286,5 +371,6 @@ if (problems.length > 0) {
 }
 console.log(
   `[check-structure] 通过：${sources.length} 个源文件 ${importCount} 处相对导入、${forEachCount} 处 ForEach、` +
+  `${tagFiles} 处 TAG 声明、${objectLinkProps.size} 个 @ObjectLink 组件 ${componentCallCount} 处调用、` +
   `${htmlFiles.length} 个 HTML 全部符合结构约束。`
 );

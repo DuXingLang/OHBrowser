@@ -1,7 +1,7 @@
 # HANDOFF — OpenHarmony Browser 示例优化（会话交接）
 
 > 写给零上下文的新会话。接手前请通读本文，尤其是最后的“踩坑清单”。
-> 更新时间：2026-10-27 10:46 · 工作目录 `D:\project\Browser` · Git 流程：`2056c72`（原版）→ `164919b`（第一轮优化）→ 第二轮改动见最新 commit
+> 更新时间：2026-10-27 17:05 · 工作目录 `D:\project\Browser` · Git 流程：`2056c72`（原版）→ `164919b`（第一轮优化）→ 第二轮及以后见最新 commit
 
 ---
 
@@ -21,6 +21,7 @@
 - 第一轮（`164919b`，25 文件 +733/−315）：5.x 迁移、核心重写、深浅色资源、HTML 语法修复、首页布局、formatUrl 单测。
 - 第二轮（`90d35e7`）：补齐**静态测试层**，据此找出并修复 10 项缺陷；布局判定改为窗口宽度断点；首页 HTML 改自绘深浅色 + 自适应栅格；文档三件套同步。
 - 第三轮（本轮）：修复新增页签崩溃（17100001）、顶栏按 Chrome 风格重做（页签条 + 药丸地址栏 + 圆形按钮）、删除与 oh-package.json5 冲突的根目录 package.json、首页新增百度快捷入口。
+- 第四轮（当前工作区未提交）：按 OpenHarmony 5.0.3 官方 ArkWeb 文档补齐能力（缩放 / 桌面版 UA / 强制深色 / 缓存策略 / 清除浏览数据 / 下载 / 页签图标 / 网页全屏 / HTTP 与渲染异常提示），顺带修复 `PhoneLayout.ets` 使用未声明 `TAG` 的编译级缺陷，并给静态检查器加了 TAG 与 @ObjectLink 传参两类规则。
 
 ## 三、验证怎么跑（本机可跑，无需 SDK）
 
@@ -36,8 +37,8 @@ node tests/check-structure.mjs  # 静态检查：导入符号 / ForEach / rawfil
 ```
 node --test                    → 7 pass / 0 fail
 node tests/check-json5.mjs     → 8 个 json5 配置全部解析通过
-node tests/check-resources.mjs → 15 个源文件 46 处源码资源引用、4 个配置文件 16 处配置引用全部命中
-node tests/check-structure.mjs → 15 个源文件 15 处相对导入、5 处 ForEach、4 个 HTML 全部符合约束
+node tests/check-resources.mjs → 16 个源文件 48 处源码资源引用、4 个配置文件 16 处配置引用全部命中
+node tests/check-structure.mjs → 16 个源文件 18 处相对导入、5 处 ForEach、6 处 TAG 声明、3 个 @ObjectLink 组件 5 处调用、4 个 HTML 全部符合约束
 ```
 
 ## 四、本轮关键改动（含“为什么”）
@@ -71,10 +72,27 @@ node tests/check-structure.mjs → 15 个源文件 15 处相对导入、5 处 Fo
 - **删除根目录 package.json**：与 `oh-package.json5` 重复导致无法编译打包；测试改为直接 `node` 执行，不再依赖 npm 脚本。
 - **首页新增百度快捷入口**：`phone.html` / `pad.html` 站点数组首位加入 `./baidu.png` → `baidu.com`。
 
+### 第四轮（按官方 ArkWeb 文档补功能）
+文档来源：`docs.openharmony.cn` 的 v5.0.3 页面返回 404，最终以 gitee 仓库 `OpenHarmony-5.0.3-Release` 分支下的 `js-apis-webview.md` 与 `ts-basic-components-web.md` 为准逐条核对签名，**没有凭空发明 API**。
+
+- **状态对象 `WebSettings`（@Observed）**：`desktopMode`/`forceDark`/`noCache`/`zoomScale`/`isFullScreen` 统一放在一个 @Observed 类里，菜单按钮与 Web 组件都通过 @ObjectLink 绑定。原因：`Browser` 本身不是 @Observed，散落在它上面的标量改了不会触发 UI 重建，`cacheMode`/`darkMode` 这类属性就不会重新下发。
+- **缩放**：`zoomAccess(true)` + `WebviewController.zoom(factor)`，factor 是**相对当前比例**的倍数，所以传 `目标倍数 / 当前倍数`，累计倍数夹在 0.5–4。
+- **桌面版 UA**：`getUserAgent()` 先备份 → `setCustomUserAgent(桌面 UA)` → `refresh()`；切回时用备份的移动版 UA。
+- **强制深色**：`darkMode(WebDarkMode.On)` + `forceDarkAccess(true)` 同一个开关；关闭回 `WebDarkMode.Auto`。
+- **缓存策略**：`cacheMode(CacheMode.None / CacheMode.Default)`，切换后自动刷新。
+- **清除浏览数据**：`clearHistory()` / `WebCookieManager.clearAllCookiesSync()` / `WebStorage.deleteAllData()` 三个各包一层 try/catch，一个失败不影响其余。
+- **下载**：`onControllerAttached` 里建 `WebDownloadDelegate` 并 `setDownloadDelegate`；`onBeforeDownload` 必须 `item.start(dir + getSuggestedFileName())`，否则一直是 PENDING。落盘目录 `getContext(this).filesDir + '/Download/'`（沙箱内，不需要公共目录权限）。
+- **页签图标**：`onFaviconReceived` → `setTabFavicon(key, PixelMap)` → 写到 `@Observed WebKey.favicon`，TabItem 里 `if (favicon !== undefined)` 显示，否则回退内置图标。
+- **网页全屏**：`onFullScreenEnter` 保存 `FullScreenExitHandler` 并回调 Index 置 `webFullScreen=true` 隐藏标题栏/工具栏；`onFullScreenExit` 恢复；`onBackPress` 在全屏时优先退出全屏。
+- **异常提示**：`onErrorReceive`（加载失败）、`onHttpErrorReceive`（仅主文档且 code>=400 提示错误码）、`onRenderExited`（渲染进程被杀 → toast + refresh）。
+- **`PhoneLayout.ets` 编译级缺陷**：`Logger.error(TAG, ...)` 用了从未声明的 `TAG`（运行到该行只会拿到 undefined，编译期不报错）。已补 `const TAG: string = '[PhoneLayout]';`，并在 `check-structure.mjs` 加了「用了 TAG 必须自己声明」的规则。
+- **菜单组件 `MoreMenu.ets`**：`bindMenu(MenuElement[])`，手机/平板工具栏共用；手机端用 `Column().layoutWeight(1)` 包一层，保证 6 个入口等分热区。
+
 ## 五、未闭环（环境限制，非代码问题）
 
 - 本机无 DevEco Studio / OpenHarmony SDK / hvigorw，**未做编译与真机运行验证**。换有 DevEco 5.0+ 的环境执行 `hvigorw assembleHap` 复核 ArkTS 严格模式告警。
 - 真机手测清单：手机竖屏/横屏各走一遍新增页签→切换→关闭→旋转；平板上限 10 页签；深色模式下首页与网页配色；无历史时按返回键应退出应用。
+- 第四轮待真机确认项：更多菜单 8 个入口逐项生效（尤其切换缓存/深色后当前页自动刷新）、页面内下载能落盘到 `files/Download/`、视频网站全屏进出、页签图标刷新、断网时的错误提示文案。
 
 ## 六、踩过的坑（绝对不要再踩）
 
@@ -96,6 +114,11 @@ node tests/check-structure.mjs → 15 个源文件 15 处相对导入、5 处 Fo
 16. git 提交后 LF→CRLF warning 是 Windows 正常现象，无需处理。
 17. `Browser.ets` 里 `import { formatUrl } from './UrlFormatter'; export { formatUrl };` 这两行是给外部与单测用的转出，**别删**。
 18. **`WebDarkMode` 不能裸写**：必须 `import webview from '@ohos.web.webview'` 后用 `webview.WebDarkMode.Auto`；`loadUrl`/`accessBackward`/`accessForward` 在 Web 未挂载时抛 17100001，必须 try/catch，否则点击新增页签即崩溃。
+19. **用了 `TAG` 必须自己声明**：`Logger.info(TAG, ...)` 里的 `TAG` 若本文件没有 `const TAG`，编译期不报错、运行到该行才炸（`PhoneLayout.ets` 就踩了）。`check-structure.mjs` 已加规则。
+20. **@ObjectLink 必须由父组件传参**：`MoreMenuButton`/`WebTab` 都需要 `settings`，漏传会在运行时抛「ObjectLink must be initialized」。检查器已校验所有调用点。
+21. **不要给 `Browser` 直接加会驱动 UI 的开关**：`Browser` 不是 @Observed，加了也不会刷新。要联动的状态放 `WebSettings`（@Observed），用 @ObjectLink 绑。
+22. **下载不调用 `item.start()` 就永远 PENDING**：`WebDownloadDelegate` 只在 `onBeforeDownload` 里主动指定保存路径才会真正开始；委托对象必须由 Browser 持有引用，否则会被回收导致回调丢失。
+23. **`zoom(factor)` 是相对倍数不是绝对值**：直接传 1.5 会在当前比例上再乘 1.5，必须换算成 `目标 / 当前`。
 
 ## 七、关键文件地图
 
@@ -104,9 +127,10 @@ entry/src/main/ets/
 ├── model/Browser.ets          # 页签/控制器/标题/canBack·canForward/formatUrl 转出
 ├── model/UrlFormatter.ts      # 纯函数：地址栏输入归一化（有单测）
 ├── model/Logger.ts            # hilog 封装（已修变参）
-├── common/TitleBar.ets        # 平板：TabletTitle / TabItem / BrowserTabs / WebTab
-├── common/PhoneLayout.ets     # 手机：PhoneHeader / PhoneToolBar
-├── pages/Index.ets            # 入口：宽度断点/形态判定/布局分支/onBackPress
+├── common/TitleBar.ets        # 平板：TabletTitle / TabItem / BrowserTabs / WebTab（含下载、favicon、全屏）
+├── common/PhoneLayout.ets     # 手机：PhoneHeader / PhoneToolBar（含更多菜单入口）
+├── common/MoreMenu.ets        # 「更多」菜单：缩放/桌面版 UA/深色/缓存/清除数据
+├── pages/Index.ets            # 入口：宽度断点/形态判定/布局分支/全屏隐藏/onBackPress
 └── Application/AbilityStage.ts、MainAbility/MainAbility.ts   # 未改动
 entry/src/main/resources/
 ├── base/dark/en_US/element/*  # 三套资源（颜色/字符串）
@@ -116,13 +140,15 @@ tests/
 ├── formatUrl.test.mjs         # 7 用例（node --test）
 ├── check-json5.mjs            # json5 解析
 ├── check-resources.mjs        # 资源引用一致性
-└── check-structure.mjs        # 导入符号 / ForEach / HTML 结构
+└── check-structure.mjs        # 导入符号 / ForEach / TAG 声明 / @ObjectLink 传参 / HTML 结构
 .claude/
 ├── context-summary-browser-round2.md
 ├── verification-report-browser-round2.md   # 自评 92 分
+├── verification-report-webview-api.md      # 第四轮（官方 API 补功能，自评 93 分）
+├── context-summary-webview-api.md          # 第四轮上下文摘要
 ├── context-summary-browser-optimization.md # 第一轮
 ├── verification-report-browser-optimization.md
-└── operations-log.md          # 两轮流水
+└── operations-log.md          # 各轮流水
 ```
 
 ## 八、环境备忘

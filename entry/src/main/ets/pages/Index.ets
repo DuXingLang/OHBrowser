@@ -30,6 +30,8 @@ struct Index {
   // true 使用手机布局；false 使用平板（多页签）布局
   @State isPhone: boolean = false;
   @State browser: Browser = new Browser();
+  // 网页全屏（视频等）状态：由 WebTab 的 onFullScreenEnter/Exit 回调驱动，true 时隐藏应用控件
+  @State webFullScreen: boolean = false;
   // 起始首页由设备形态决定且运行期不变，保证旋转时 Web 的 src 不变化、页面不重载
   private homeIsPhone: boolean = true;
   private widthListener: mediaquery.MediaQueryListener | undefined = undefined;
@@ -82,21 +84,31 @@ struct Index {
 
   build() {
     Column() {
-      if (this.isPhone) {
-        PhoneHeader({ browser: $browser })
-      } else {
-        TabletTitle({ browser: $browser })
-        Progress({ value: this.browser.progress, total: 100 })
-          .color($r('app.color.progress_blue'))
-          .visibility(this.browser.hideProgress ? Visibility.Hidden : Visibility.Visible)
-          .flexShrink(0)
-        // 页签条已内置于 TabletTitle（页签条 + 工具栏一体），此处不再重复渲染
-        Divider().color($r('app.color.divider_color')).width('100%').flexShrink(0)
+      // 网页全屏（视频等）时隐藏所有应用内控件，只保留 Web 占满整屏
+      if (!this.webFullScreen) {
+        if (this.isPhone) {
+          PhoneHeader({ browser: $browser })
+        } else {
+          TabletTitle({ browser: $browser })
+          Progress({ value: this.browser.progress, total: 100 })
+            .color($r('app.color.progress_blue'))
+            .visibility(this.browser.hideProgress ? Visibility.Hidden : Visibility.Visible)
+            .flexShrink(0)
+          // 页签条已内置于 TabletTitle（页签条 + 工具栏一体），此处不再重复渲染
+          Divider().color($r('app.color.divider_color')).width('100%').flexShrink(0)
+        }
       }
       // WebTab 常驻组件树：横竖屏切换仅切换标题栏/工具栏，Web 不销毁，浏览状态不丢失
-      WebTab({ browser: $browser, homeIsPhone: this.homeIsPhone })
+      WebTab({
+        browser: $browser,
+        settings: this.browser.settings,
+        homeIsPhone: this.homeIsPhone,
+        onFullScreenChange: (fullScreen: boolean) => {
+          this.webFullScreen = fullScreen;
+        }
+      })
         .layoutWeight(1)
-      if (this.isPhone) {
+      if (!this.webFullScreen && this.isPhone) {
         // 手机布局没有页签条，存在多个页签时补一条页签栏，否则用户无法切回之前的页签
         if (this.browser.webArray.length > 1) {
           BrowserTabs({ browser: $browser })
@@ -111,6 +123,12 @@ struct Index {
 
   onBackPress(): boolean {
     Logger.info(TAG, `enter onBackPress`);
+    // 网页全屏时返回键先退出全屏，而不是直接后退网页
+    if (this.webFullScreen) {
+      this.browser.requestExitFullScreen();
+      this.webFullScreen = false;
+      return true;
+    }
     try {
       const controller = this.browser.webControllerArray[this.browser.tabArrayIndex]?.controller;
       // 仅在当前页可后退时消费返回键；否则交还系统处理（退出应用），

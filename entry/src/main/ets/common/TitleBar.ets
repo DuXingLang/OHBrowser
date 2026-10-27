@@ -12,10 +12,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-import { Browser, LoadingStatus, WebKey, WebObject } from '../model/Browser';
+import { Browser, LoadingStatus, WebKey, WebObject, WebSettings } from '../model/Browser';
 import webview from '@ohos.web.webview';
 import Logger from '../model/Logger';
 import { promptAction } from '@kit.ArkUI';
+import { fileIo } from '@kit.CoreFileKit';
+import { MoreMenuButton } from './MoreMenu';
 
 const TAG: string = '[TitleBar]';
 // 圆形图标按钮直径（无障碍建议的最小点击热区）
@@ -220,6 +222,14 @@ export struct TabletTitle {
         .padding({ left: 12, right: 4 })
         .layoutWeight(1)
         .margin({ left: 4, right: 8 })
+
+        // 更多菜单：缩放 / 桌面版 UA / 深色渲染 / 缓存策略 / 清除浏览数据
+        MoreMenuButton({
+          browser: this.browser,
+          settings: this.browser.settings,
+          buttonSize: BUTTON_SIZE,
+          iconSize: ICON_SIZE
+        })
       }
       .width('100%')
       .height(TOOLBAR_HEIGHT)
@@ -246,11 +256,21 @@ struct TabItem {
     Row() {
       // 选择热区：favicon + 标题占满关闭按钮以外的空间
       Row() {
-        Image($r('app.media.ic_public_navigation'))
-          .width(OMNIBOX_ICON_SIZE)
-          .height(OMNIBOX_ICON_SIZE)
-          .opacity(this.active ? 0.9 : 0.5)
-          .flexShrink(0)
+        if (this.item.favicon !== undefined) {
+          // 已拿到站点图标时直接显示，避免所有页签都是同一个内置图标
+          Image(this.item.favicon)
+            .width(OMNIBOX_ICON_SIZE)
+            .height(OMNIBOX_ICON_SIZE)
+            .borderRadius(2)
+            .objectFit(ImageFit.Contain)
+            .flexShrink(0)
+        } else {
+          Image($r('app.media.ic_public_navigation'))
+            .width(OMNIBOX_ICON_SIZE)
+            .height(OMNIBOX_ICON_SIZE)
+            .opacity(this.active ? 0.9 : 0.5)
+            .flexShrink(0)
+        }
 
         Text(this.item.title ? this.item.title : '主页')
           .fontSize(12)
@@ -332,8 +352,13 @@ export struct BrowserTabs {
 @Component
 export struct WebTab {
   @Link browser: Browser;
+  // 显示/网络行为设置：@ObjectLink 绑定后，切换缓存/深色等状态会重建 Web 组件属性
+  @ObjectLink settings: WebSettings;
   // 起始首页按设备形态决定，运行期保持不变：横竖屏切换时 Web 的 src 不变，避免旋转导致页面重载
   @Prop homeIsPhone: boolean = true;
+  // 网页全屏状态变化时回调页面，用于隐藏/恢复标题栏与工具栏
+  onFullScreenChange: (fullScreen: boolean) => void = () => {
+  };
   // 注入给 HTML 的桥接对象，方法名需与 registerJavaScriptProxy 的第三个参数一致
   testObj = {
     test: (addr: string) => {
@@ -360,8 +385,13 @@ export struct WebTab {
             .mixedMode(MixedMode.All)
             .multiWindowAccess(true)
             .zoomAccess(true)
-            // 跟随系统深浅色：网页内容一并切换暗色渲染
-            .darkMode(webview.WebDarkMode.Auto)
+            // 长页面始终显示滚动条，便于用户在触屏上判断当前位置
+            .verticalScrollBarAccess(true)
+            // 缓存策略：禁用时强制每次请求都回源，便于调试弱网首屏
+            .cacheMode(this.settings.noCache ? CacheMode.None : CacheMode.Default)
+            // 深色渲染：跟随系统；强制开启时把无深色样式的网页也做反色处理
+            .darkMode(this.settings.forceDark ? webview.WebDarkMode.On : webview.WebDarkMode.Auto)
+            .forceDarkAccess(this.settings.forceDark)
             .onWindowNew((event) => {
               Logger.info(TAG, `onWindowNew targetUrl: ` + event.targetUrl);
               if (event.targetUrl !== 'about:blank' && event.targetUrl !== '') {
@@ -412,6 +442,38 @@ export struct WebTab {
                 promptAction.showToast({ message: '网页加载失败，请检查网络' });
               }
             })
+            .onHttpErrorReceive((event) => {
+              // 4xx/5xx 由服务器正常返回，onErrorReceive 不会触发，这里单独提示错误码
+              const code = event?.response?.getResponseCode() ?? 0;
+              if (event?.request?.isMainFrame() && code >= 400) {
+                promptAction.showToast({ message: `网页返回错误：${code}` });
+              }
+            })
+            .onRenderExited((event) => {
+              // 渲染进程异常退出（如内存不足被杀）：提示并尝试重载，避免留下白屏
+              Logger.error(TAG, `onRenderExited reason= ${event?.renderExitReason}`);
+              promptAction.showToast({ message: '页面渲染异常，正在重新加载' });
+              this.browser.webControllerArray[item.key]?.controller?.refresh();
+            })
+            .onControllerAttached(() => {
+              // Web 组件挂载完成、controller 已关联后才能设置下载委托
+              this.setupDownload(this.browser.webControllerArray[item.key]);
+            })
+            .onFaviconReceived((event) => {
+              // 站点图标用于页签左上角，取不到时页签回退为内置图标
+              if (event?.favicon !== undefined) {
+                this.browser.setTabFavicon(item.key, event.favicon);
+              }
+            })
+            .onFullScreenEnter((event) => {
+              // 网页视频等请求全屏：隐藏应用标题栏与工具栏，交给网页占满整屏
+              this.browser.enterWebFullScreen(event.handler);
+              this.onFullScreenChange(true);
+            })
+            .onFullScreenExit(() => {
+              this.browser.exitWebFullScreen();
+              this.onFullScreenChange(false);
+            })
         }
       }, (item: WebKey) => item.timestamp.toString())
     }
@@ -425,6 +487,27 @@ export struct WebTab {
       webObject.controller.registerJavaScriptProxy(this.testObj, 'etsObj', ['test', 'searchWord']);
       webObject.isRegistered = true;
       webObject.controller.refresh();
+    }
+  }
+
+  // 初始化下载能力：页面内触发的下载必须在 onBeforeDownload 中调用 start 才会真正开始。
+  // 文件统一落到应用沙箱的 Download 目录，无需申请公共目录读写权限。
+  private setupDownload(object: WebObject | undefined) {
+    if (object === undefined) {
+      return;
+    }
+    const dir = getContext(this).filesDir + '/Download/';
+    try {
+      // 目录已存在时 mkdirSync 会抛错，这里只关心“目录可用”这一结果
+      fileIo.mkdirSync(dir);
+    } catch (error) {
+      Logger.info(TAG, `download dir already exists: ${JSON.stringify(error)}`);
+    }
+    try {
+      this.browser.setupDownload(dir);
+      this.browser.attachDownloadDelegate(object.controller);
+    } catch (error) {
+      Logger.error(TAG, `setupDownload failed: ${JSON.stringify(error)}`);
     }
   }
 }

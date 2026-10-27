@@ -16,7 +16,10 @@
 4. 点击输入框左侧前进后退按钮进行页面的前进后退，点击主页图标回到主页，点击加号按钮新建页面（页签上限 10 个）;
 5. 布局按窗口宽度断点（600vp）切换：宽度小于断点时使用单页签 + 底部工具栏布局，否则使用多页签布局；手机横竖屏、平板分屏、2in1 自由窗口缩放时自动切换，且 Web 组件常驻、浏览状态不丢失;
 6. 手机布局存在多个页签时会在工具栏上方显示页签条，可切换页签；前进/后退/关闭按钮不可用时图标置灰;
-7. 首页与标题栏跟随系统深浅色，网页内容使用 WebDarkMode.Auto 同步切换。
+7. 首页与标题栏跟随系统深浅色，网页内容使用 WebDarkMode.Auto 同步切换;
+8. 工具栏右侧「更多」菜单提供：网页放大/缩小/缩放重置、切换桌面版网站、强制深色渲染、启用/禁用缓存、清除浏览数据（历史记录、Cookie、Web 存储）;
+9. 页面内触发的下载会保存到应用沙箱 `files/Download/` 目录并弹出开始/完成提示；网页视频等请求全屏时自动隐藏标题栏与工具栏，按返回键先退出全屏;
+10. 页签会显示站点图标（取不到时回退为内置图标），主文档 4xx/5xx 与渲染进程异常会给出提示。
 
 ### 工程目录
 ```
@@ -28,6 +31,7 @@ entry/src/main/ets/
 |---common
 |   |---PhoneLayout.ets                         // 手机端地址栏与底部工具栏
 |   |---TitleBar.ets                            // 平板端标题栏、页签条与 Web 组件
+|   |---MoreMenu.ets                            // 「更多」菜单（缩放/桌面版/深色/缓存/清除数据）
 |---model
 |   |---Logger.ts                               // 日志工具
 |   |---Browser.ets                             // 浏览器实例
@@ -36,7 +40,7 @@ tests/
 |---formatUrl.test.mjs                          // 单元测试（node --test）
 |---check-json5.mjs                             // 静态检查：json5 配置可解析
 |---check-resources.mjs                         // 静态检查：$r/$rawfile 与配置资源引用均已定义
-|---check-structure.mjs                         // 静态检查：导入符号、ForEach 三参数、rawfile HTML 结构
+|---check-structure.mjs                         // 静态检查：导入符号、ForEach 三参数、TAG 声明、@ObjectLink 传参、rawfile HTML 结构
 ```
 
 ### 具体实现
@@ -50,6 +54,18 @@ tests/
   + 起始首页按设备形态选定后运行期不再变化，Web 组件常驻组件树，横竖屏切换时不销毁，浏览状态不丢失;
 + 首页页面：[phone.html](entry/src/main/resources/rawfile/phone.html) 与 [pad.html](entry/src/main/resources/rawfile/pad.html)
   + 页面自绘深浅色变量（prefers-color-scheme），站点栅格按宽度自适应并在矮屏/横屏时压缩留白，站点区可滚动；默认快捷站点含百度（https://baidu.com）等入口，点击图标直接访问。
++ 扩展能力（基于 OpenHarmony 5.0.x ArkWeb API），源码参考[Browser.ets](entry/src/main/ets/model/Browser.ets)与[MoreMenu.ets](entry/src/main/ets/common/MoreMenu.ets)
+  + 缩放：Web 组件开启 `zoomAccess(true)`，`WebviewController.zoom(factor)` 的入参是相对当前比例的倍数，因此按「目标倍数 / 当前倍数」换算，累计倍数限制在 0.5–4 倍;
+  + 桌面版 UA：`getUserAgent()` 备份原始 UA，`setCustomUserAgent()` 切换为桌面版 UA 后刷新，切回时恢复备份的移动版 UA;
+  + 深色渲染：`darkMode(WebDarkMode.On)` 与 `forceDarkAccess(true)` 绑定同一个开关，关闭时回到 `WebDarkMode.Auto` 跟随系统;
+  + 缓存策略：`cacheMode(CacheMode.None)` 强制回源、`CacheMode.Default` 走默认策略，切换后自动刷新当前页;
+  + 清除浏览数据：`clearHistory()`、`WebCookieManager.clearAllCookiesSync()`、`WebStorage.deleteAllData()` 逐个 try/catch 调用，单个失败不影响其余;
+  + 下载：在 `onControllerAttached` 中创建并绑定 `WebDownloadDelegate`，`onBeforeDownload` 里必须调用 `item.start(路径)`，否则下载停留在等待状态；文件落到应用沙箱 `files/Download/`，无需申请公共目录权限;
+  + 页签图标：`onFaviconReceived` 拿到 PixelMap 后写入对应 `WebKey`，页签条通过 @ObjectLink 精确刷新;
+  + 网页全屏：`onFullScreenEnter` 保存 `FullScreenExitHandler` 并隐藏应用内控件，`onFullScreenExit` 或返回键（先退出全屏）恢复;
+  + 异常提示：`onErrorReceive`（加载失败）、`onHttpErrorReceive`（4xx/5xx，仅主文档）、`onRenderExited`（渲染进程异常后自动重载）分别给出提示;
+  + 所有 controller 调用先判空并 try/catch：新建页签、页签切换瞬间 Web 未挂载会抛 17100001「controller 未与 Web 组件关联」;
++ 状态与菜单联动：可切换的显示/网络行为收敛在 `WebSettings`（@Observed）中，菜单用 @ObjectLink 显示当前状态，Web 组件用 @ObjectLink 绑定 `cacheMode`/`darkMode`，切换后立即生效;
 
 ### 相关权限
 

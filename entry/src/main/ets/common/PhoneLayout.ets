@@ -14,7 +14,9 @@
  */
 import { Browser } from '../model/Browser';
 import Logger from '../model/Logger';
+import { MoreMenuButton } from './MoreMenu';
 
+const TAG: string = '[PhoneLayout]';
 // 工具栏图标显示尺寸
 const TOOL_ICON_SIZE: number = 24
 // 地址栏内图标尺寸
@@ -185,6 +187,20 @@ export struct PhoneToolBar {
             }
           })
         }, (item: ButtonItem) => item.id.toString())
+
+        // 更多菜单：缩放 / 桌面版 UA / 深色渲染 / 缓存策略 / 清除浏览数据，
+        // 与其余按钮等分宽度，保证 6 个入口在窄屏上也均分热区
+        Column() {
+          MoreMenuButton({
+            browser: this.browser,
+            settings: this.browser.settings,
+            buttonSize: TOUCH_TARGET,
+            iconSize: TOOL_ICON_SIZE
+          })
+        }
+        .layoutWeight(1)
+        .height('100%')
+        .justifyContent(FlexAlign.Center)
       }
       .width('100%')
       .layoutWeight(1)

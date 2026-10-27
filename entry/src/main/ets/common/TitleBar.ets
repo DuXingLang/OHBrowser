@@ -12,24 +12,28 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 import { Browser, LoadingStatus, WebObject } from '../model/Browser';
 import Logger from '../model/Logger';
 import webview from '@ohos.web.webview';
+import { promptAction } from '@kit.ArkUI';
 
 const TAG: string = '[TitleBar]';
-const BUTTON_WIDTH: number = 22;
+// 无障碍建议的最小点击热区（vp）
+const BUTTON_WIDTH: number = 40;
+// 图标显示尺寸
+const ICON_SIZE: number = 24;
 const BUTTON_RADIUS: number = 4;
-const DOWN_COLOR: string = '#e4e4e4';
-const UP_COLOR: string = '#00000000';
-// 此处可按照需求到浏览器请求里获取（浏览器请求的HEAD部分，字段为USER_AGENT）
-const PAD_USER_AGENT: string = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTMl, like Gecko) Chrome/92.0.4515.105 Safari/537.36';
-const PHONE_USER_AGENT: string = 'HuaweiBrowser/12.0.4.1';
+// 页签固定宽度
+const TAB_WIDTH: number = 180;
+
+interface TitleButtonItem {
+  imageSrc: Resource,
+  id: number
+}
 
 @Component
 export struct TabletTitle {
   @Link browser: Browser;
-  @State inputValue: string = '';
   @State arrayIndex: number = 0;
   private addr: string = '';
   private navigationButton: Array<{
@@ -71,13 +75,13 @@ export struct TabletTitle {
     Row() {
       ForEach(this.navigationButton, (item, index) => {
         Button({ type: ButtonType.Normal }) {
-          Image(item.imageSrc)
+          Image(item.imageSrc).width(ICON_SIZE).height(ICON_SIZE)
         }
         .margin(8)
         .id(`navigationButton${index}`)
         .width(BUTTON_WIDTH)
         .height(BUTTON_WIDTH)
-        .backgroundColor(this.arrayIndex === item.id ? DOWN_COLOR : UP_COLOR)
+        .backgroundColor(this.arrayIndex === item.id ? $r('app.color.press_bg') : $r('app.color.transparent'))
         .borderRadius(BUTTON_RADIUS)
         .flexShrink(0)
         .onTouch((event: TouchEvent) => {
@@ -106,14 +110,13 @@ export struct TabletTitle {
               break;
           }
         })
-      }, item => item.id)
+      }, item => item.id.toString())
 
-      TextInput({ placeholder: '输入网址...', text: this.browser.inputValue })
+      TextInput({ placeholder: $r('app.string.Input_url'), text: this.browser.inputValue })
         .placeholderFont({ size: 18, weight: 500 })
         .fontSize(18)
         .margin(2)
         .id('inputUrl')
-        .width('51%')
         .layoutWeight(1)
         .onChange((value: string) => {
           this.addr = value;
@@ -121,21 +124,21 @@ export struct TabletTitle {
         .onSubmit((enterKey: EnterKeyType) => {
           Logger.info(TAG, `onSubmit`)
           if (this.addr.length !== 0) {
-            this.browser.webControllerArray[this.browser.tabArrayIndex]?.controller
-              .loadUrl(`https://${this.addr}`);
+            // 统一走 Browser.loadUrl，由 formatUrl 做协议补全与搜索词归一化
+            this.browser.loadUrl(this.addr);
             this.addr = '';
           }
         })
 
-      ForEach(this.actionButton, (item, index) => {
+      ForEach(this.actionButton, (item: TitleButtonItem, index: number) => {
         Button({ type: ButtonType.Normal }) {
-          Image(item.imageSrc)
+          Image(item.imageSrc).width(ICON_SIZE).height(ICON_SIZE)
         }
         .margin(8)
         .id(`actionButton${index}`)
         .width(BUTTON_WIDTH)
         .height(BUTTON_WIDTH)
-        .backgroundColor(this.arrayIndex === item.id ? DOWN_COLOR : UP_COLOR)
+        .backgroundColor(this.arrayIndex === item.id ? $r('app.color.press_bg') : $r('app.color.transparent'))
         .borderRadius(BUTTON_RADIUS)
         .flexShrink(0)
         .onTouch((event: TouchEvent) => {
@@ -148,17 +151,23 @@ export struct TabletTitle {
         })
         .onClick((event: ClickEvent) => {
           if (item.id === 5) {
-            this.browser.loadUrl(this.addr);
-            this.addr = '';
+            if (this.addr.length !== 0) {
+              // 统一走 Browser.loadUrl，由 formatUrl 做协议补全与搜索词归一化
+              this.browser.loadUrl(this.addr);
+              this.addr = '';
+            }
           } else if (item.id === 6) {
             Logger.info(TAG, `add tab index = ` + this.arrayIndex);
             this.browser.addTab();
           }
         })
-      }, item => item.id)
+      }, (item: TitleButtonItem) => item.id.toString())
     }
     .width('100%')
+    .height(48)
     .padding({ right: 5 })
+    .backgroundColor($r('app.color.page_bg'))
+    .flexShrink(0)
   }
 }
 
@@ -169,25 +178,34 @@ export struct BrowserTabs {
 
   build() {
     Flex({ direction: FlexDirection.Row, alignItems: ItemAlign.Start }) {
-      ForEach(this.browser.webArray, item => {
+      ForEach(this.browser.webArray, (item, index) => {
         Row() {
           Row() {
-            Text('主页')
-          }.width('100%').flexShrink(1).justifyContent(FlexAlign.Center).height('100%')
+            // 展示实际页面标题（onPageEnd 时更新），空标题回退为“主页”
+            Text(this.browser.tabTitles[item.key] ?? '主页')
+              .fontSize(14)
+              .maxLines(1)
+              .textOverflow({ overflow: TextOverflow.Ellipsis })
+          }
+          .width('100%')
+          .flexShrink(1)
+          .justifyContent(FlexAlign.Center)
+          .height('100%')
 
           Button({ type: ButtonType.Normal }) {
-            Image($r('app.media.ic_public_cancel_filled')).width(24).height(24)
+            Image($r('app.media.ic_public_cancel_filled')).width(20).height(20)
           }
-          .backgroundColor(this.tabButtonIndex == item.key ? DOWN_COLOR : '#00000000')
+          .backgroundColor(this.tabButtonIndex === item.key ? $r('app.color.press_bg') : $r('app.color.transparent'))
           .id('cancelBtn')
           .margin({ right: 2 })
           .width(33)
           .height(33)
           .borderRadius(5)
+          .flexShrink(0)
           .onTouch((event: TouchEvent) => {
             if (event.type === TouchType.Down) {
               this.tabButtonIndex = item.key;
-            } else if (event.type == TouchType.Up) {
+            } else if (event.type === TouchType.Up) {
               this.tabButtonIndex = -1;
             }
           })
@@ -196,16 +214,23 @@ export struct BrowserTabs {
               this.browser.deleteTab(item.key);
             }
           })
-        }.width(180).height('100%').backgroundColor(this.browser.tabArrayIndex == item.key ? '#ffffff' : '#ececec')
+        }
+        .width(TAB_WIDTH)
+        .height('100%')
+        .backgroundColor(this.browser.tabArrayIndex === item.key
+          ? $r('app.color.tab_active_bg') : $r('app.color.tab_bar_bg'))
         .onClick((event: ClickEvent) => {
           Logger.info(TAG, `key= ${item.key}`);
           this.browser.setTabArrayIndex(item.key);
           this.browser.tabsController.changeIndex(item.key);
         })
 
-        Divider().vertical(true).color('#c6c6c6');
-      }, item => item.timestamp.toString())
-    }.height(33).flexShrink(0).backgroundColor('#ececec');
+        Divider().vertical(true).color($r('app.color.divider_color'))
+      }, (item) => item.timestamp.toString())
+    }
+    .height(33)
+    .flexShrink(0)
+    .backgroundColor($r('app.color.tab_bar_bg'))
   }
 }
 
@@ -213,35 +238,21 @@ export struct BrowserTabs {
 export struct WebTab {
   @Link browser: Browser;
   @Link isPhone: boolean;
-  @State userAgent: string = '';
   isRegistered: boolean = false;
   testObj = {
-    test: (addr) => {
-      Logger.info(TAG, `addr= ${this.browser.tabArrayIndex}`);
-      this.browser.webControllerArray[this.browser.tabArrayIndex]?.controller.loadUrl(`https://${addr}`);
+    test: (addr: string) => {
+      // HTML 端传入裸域名，统一走 formatUrl 做协议补全与搜索词归一化
+      this.browser.loadUrl(addr);
     },
     searchWord: (word: string) => {
       Logger.info(`search word= ${word}`);
-      let code = encodeURI(word);
-      this.browser.webControllerArray[this.browser.tabArrayIndex]?.controller
-        .loadUrl(`https://www.bing.com/search?q=${code}`);
+      this.browser.loadUrl(word);
     }
-  }
-
-  aboutToAppear() {
-    webview.once('webInited', () => {
-      try {
-        this.userAgent = this.browser.webControllerArray[this.browser.tabArrayIndex]?.controller.getUserAgent();
-        Logger.info(`getUserAgent successed, detail: ${this.userAgent}`);
-      } catch (error) {
-        Logger.error(`getUserAgent failed, error info: ${this.userAgent}`);
-      }
-    })
   }
 
   build() {
     Tabs({ barPosition: BarPosition.Start, controller: this.browser.tabsController }) {
-      ForEach(this.browser.webArray, item => {
+      ForEach(this.browser.webArray, (item, index) => {
         TabContent() {
           Web({
             src: this.isPhone ? $rawfile('phone.html') : $rawfile('pad.html'),
@@ -250,7 +261,6 @@ export struct WebTab {
             .javaScriptAccess(true)
             .fileAccess(true)
             .domStorageAccess(true)
-            .userAgent(this.userAgent)
             .mixedMode(MixedMode.All)
             .multiWindowAccess(true)
             .onWindowNew((event) => {
@@ -271,22 +281,23 @@ export struct WebTab {
             })
             .onPageEnd((event) => {
               Logger.info(TAG, `onPageEnd= ${JSON.stringify(event)}`)
-              if (item.key < this.browser.webControllerArray.length && this.browser.webControllerArray[item.key]?.controller) {
+              if (item.key < this.browser.webControllerArray.length
+                && this.browser.webControllerArray[item.key]?.controller) {
                 this.browser.webControllerArray[item.key]?.controller?.runJavaScript('adapterDevice()');
                 this.browser.loadingStatus = LoadingStatus.END;
                 this.registerFunc(this.browser.webControllerArray[item.key]);
+                // 用实际页面标题更新页签显示，空标题回退为“主页”
+                try {
+                  this.browser.setTabTitle(item.key,
+                    this.browser.webControllerArray[item.key]?.controller?.getTitle() ?? '');
+                } catch (error) {
+                  Logger.error(TAG, `getTitle failed: ${JSON.stringify(error)}`);
+                }
               }
             })
             .onProgressChange((event) => {
               Logger.info(TAG, `onProgressChange`);
               this.browser.progress = event.newProgress;
-              if (!this.browser.inputValue) {
-                if (event.newProgress !== 10) {
-                  this.browser.progress = event.newProgress;
-                }
-              } else {
-                this.browser.progress = event.newProgress;
-              }
               if (this.browser.progress === 100) {
                 this.browser.hideProgress = true;
                 this.browser.progress = 0;
@@ -294,8 +305,14 @@ export struct WebTab {
                 this.browser.hideProgress = false;
               }
             })
+            .onErrorReceive((event) => {
+              // 仅主文档加载失败时提示，避免子资源错误频繁打扰
+              if (event && event.request.isMainFrame()) {
+                promptAction.showToast({ message: '网页加载失败，请检查网络' });
+              }
+            })
         }
-      }, item => item.timestamp.toString())
+      }, (item) => item.timestamp.toString())
     }
     .barHeight(0)
     .scrollable(false)

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2022 Huawei Device Co., Ltd.
+ * Copyright (c) 2023 Huawei Device Co., Ltd.
  * Licensed under the Apache License, Version 2.0 (the "License");
  * you may not use this file except in compliance with the License.
  * You may obtain a copy of the License at
@@ -13,177 +13,153 @@
  * limitations under the License.
  */
 import { Browser } from '../model/Browser';
-import { WebTab } from './TitleBar';
-import Logger from '../model/Logger';
 
-const TAG: string = '[PhoneLayout]';
-const BUTTON_WIDTH: number = 22;
-const BUTTON_RADIUS: number = 4;
-const DOWN_COLOR: string = '#e4e4e4';
-const UP_COLOR: string = '#00000000';
+// 工具栏图标显示尺寸
+const TOOL_ICON_SIZE: number = 24
+// 无障碍建议的最小点击热区（vp）
+const TOUCH_TARGET: number = 40
+// 工具栏高度
+const TOOLBAR_HEIGHT: number = 52
 
+interface ButtonItem {
+  imageSrc: Resource;
+  id: number;
+}
+
+// 手机布局顶部区：地址栏 + 进度条
 @Component
-export struct PhoneLayout {
+export struct PhoneHeader {
   @Link browser: Browser;
-  @State isPhone: boolean = true;
   @State hasDown: boolean = false;
-  @State pageCount: string = '1';
-  @State arrayIndex: number = 0;
   private addr: string = '';
-  private toolPoneArray: Array<{
-    imageSrc: Resource,
-    id: number
-  }> = [
-    {
-      imageSrc: $r('app.media.ic_public_back'),
-      id: 1
-    },
-    {
-      imageSrc: $r('app.media.ic_public_advance'),
-      id: 2
-    },
-    {
-      imageSrc: $r('app.media.ic_public_home'),
-      id: 5
-    },
-    {
-      imageSrc: $r('app.media.ic_public_refresh'),
-      id: 3
-    }
-  ];
 
-  @Builder ToolBar() {
+  build() {
     Column() {
-      if (!this.browser.hideProgress) {
-        Progress({ value: this.browser.progress, total: 100 })
-          .color('#0000ff')
-      }
-      Row() {
-        ForEach(this.toolPoneArray, (item: any, index: number) => {
-          Column() {
-            Divider().color('#e9eaec')
-            Button({ type: ButtonType.Normal }) {
-              Column() {
-                if (item.id !== 4) {
-                  Image(item.imageSrc)
-                } else {
-                  Column() {
-                    Text(this.pageCount)
-                      .fontSize(16)
-                  }
-                  .border({ width: 2 })
-                  .width(22)
-                  .height(22)
-                  .borderRadius(5)
-                  .justifyContent(FlexAlign.Center)
-                }
-              }
-              .width(BUTTON_WIDTH)
-              .height(BUTTON_WIDTH)
-              .justifyContent(FlexAlign.Center)
-            }
-            .height('100%')
-            .width('100%')
-            .backgroundColor(this.arrayIndex === item.id ? DOWN_COLOR : UP_COLOR)
-            .borderRadius(BUTTON_RADIUS)
-            .flexShrink(0)
-            .onTouch((event: TouchEvent) => {
-              if (event.type === TouchType.Down) {
-                this.arrayIndex = item.id;
-              } else if (event.type === TouchType.Up) {
-                this.arrayIndex = 0;
-              }
-            })
-            .onClick((event: ClickEvent) => {
-              switch (item.id) {
-                case 1:
-                  this.browser.Back();
-                  break;
-                case 2:
-                  this.browser.Forward();
-                  break;
-                case 3:
-                  this.browser.Refresh();
-                  break;
-                case 5:
-                  this.browser.webControllerArray[this.browser.tabArrayIndex].controller.loadUrl($rawfile('phone.html'));
-                  break;
-                default:
-                  break;
-              }
-            })
-          }
-          .width('20%')
-          .id(`navigationButton${index}`)
-        })
-      }
-      .justifyContent(FlexAlign.SpaceAround)
-      .width('100%')
-      .height('100%')
-      .backgroundColor('#fdfdfd')
-    }
-    .height('100%')
-  }
-
-  @Builder TitleBar() {
-    Flex({ justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Center }) {
-      Column() {
+      Flex({ justifyContent: FlexAlign.SpaceBetween, alignItems: ItemAlign.Center }) {
         TextInput({ placeholder: $r('app.string.Input_url'), text: this.browser.inputValue })
           .placeholderFont({ size: 16, weight: 500 })
           .fontSize(16)
           .height(34)
           .margin({ left: 6 })
           .id('inputUrl')
+          .layoutWeight(1)
           .onChange((value: string) => {
-            Logger.info(TAG, `onChange`);
             this.addr = value;
+            this.hasDown = this.addr.length > 0;
           })
-          .onSubmit((enterKey: EnterKeyType) => {
-            Logger.info(TAG, `onSubmit`);
-            this.browser.webControllerArray[this.browser.tabArrayIndex].controller.loadUrl(`https://${this.addr}`);
+          .onSubmit(() => {
+            // 统一走 Browser.loadUrl，由 formatUrl 做协议补全与搜索词归一化
+            this.browser.loadUrl(this.addr);
             this.addr = '';
           })
-      }
 
-      Column() {
-        Button({ type: ButtonType.Normal }) {
+        Button({ type: ButtonType.Normal, stateEffect: true }) {
           Image($r('app.media.submit'))
+            .width(TOOL_ICON_SIZE)
+            .height(TOOL_ICON_SIZE)
+            .opacity(this.hasDown ? 1 : 0.4)
         }
-        .width(BUTTON_WIDTH)
-        .height(BUTTON_WIDTH)
-        .backgroundColor(this.hasDown ? DOWN_COLOR : UP_COLOR)
-        .margin({ top: 6 })
-        .id(`actionButton0`)
+        .backgroundColor($r('app.color.transparent'))
+        .width(TOUCH_TARGET)
+        .height(TOUCH_TARGET)
+        .margin({ left: 8, right: 8 })
+        .onClick(() => {
+          if (this.addr === '') {
+            return;
+          }
+          this.browser.loadUrl(this.addr);
+          this.addr = '';
+        })
       }
-      .width('10%')
-      .height(34)
-      .flexShrink(0)
-      .backgroundColor(this.hasDown ? DOWN_COLOR : UP_COLOR)
-      .borderRadius(BUTTON_RADIUS)
-      .margin({ left: 6, right: 6 })
-      .onTouch((event: TouchEvent) => {
-        if (event.type === TouchType.Down) {
-          this.hasDown = true;
-        } else if (event.type === TouchType.Up) {
-          this.hasDown = false;
-        }
-      })
-      .onClick((event: ClickEvent) => {
-        this.browser.loadUrl(this.addr);
-        this.addr = '';
-      })
+      .width('100%')
+      .padding({ top: 4, left: 6, right: 6 })
+
+      // 加载进度条：仅加载中显示
+      Progress({ value: this.browser.progress, total: 100 })
+        .color($r('app.color.progress_blue'))
+        .height(2)
+        .margin({ top: 2 })
+        .visibility(this.browser.hideProgress ? Visibility.Hidden : Visibility.Visible)
     }
-    .position({ x: 0, y: 3 })
+    .backgroundColor($r('app.color.page_bg'))
+    .flexShrink(0)
   }
+}
+
+// 手机布局底部工具栏：主页/新标签/关闭/后退/刷新/前进
+@Component
+export struct PhoneToolBar {
+  @Link browser: Browser;
+  @State arrayIndex: number = 0;
+  private toolPoneArray: ButtonItem[] = [
+    {
+      imageSrc: $r('app.media.aa'), id: 3
+    },
+    {
+      imageSrc: $r('app.media.add'), id: 1
+    },
+    {
+      imageSrc: $r('app.media.delete'), id: 2
+    },
+    {
+      imageSrc: $r('app.media.fresh'), id: 0
+    },
+    {
+      imageSrc: $r('app.media.home'), id: 5
+    },
+    {
+      imageSrc: $r('app.media.bb'), id: 6
+    }
+  ];
 
   build() {
-    Column() {
-      Navigation() {
-        WebTab({ browser: $browser, isPhone: $isPhone })
-      }
-      .title({ builder: this.TitleBar, height: 40 })
-      .toolBar(this.ToolBar)
-      .hideBackButton(true)
+    Row() {
+      ForEach(this.toolPoneArray, (item: ButtonItem, index: number) => {
+        Column() {
+          Divider().color($r('app.color.divider_light'))
+          Button({ type: ButtonType.Normal, stateEffect: true }) {
+            Image(item.imageSrc)
+              .width(TOOL_ICON_SIZE)
+              .height(TOOL_ICON_SIZE)
+          }
+          .id(item.id)
+          .backgroundColor(item.id !== this.arrayIndex ? $r('app.color.transparent') : $r('app.color.press_bg'))
+          .width('20%')
+          .height('100%')
+          .onClick(() => {
+            switch (item.id) {
+              case 0:
+                this.browser.Refresh();
+                break;
+              case 1:
+                this.browser.addTab();
+                break;
+              case 2:
+                this.browser.deleteTab(this.browser.getTabArrayIndex());
+                this.arrayIndex = 0;
+                break;
+              case 3:
+                this.browser.Back();
+                break;
+              case 5:
+                // 主页：空保护后加载内置首页
+                this.browser.webControllerArray[this.browser.tabArrayIndex]?.controller.loadUrl($rawfile('phone.html'));
+                break;
+              case 6:
+                this.browser.Forward();
+                break;
+              default:
+                break;
+            }
+          })
+        }
+        .width('20%')
+        .height('100%')
+      }, (item: ButtonItem) => item.id.toString())
     }
+    .height(TOOLBAR_HEIGHT)
+    .width('100%')
+    .backgroundColor($r('app.color.page_bg'))
+    .flexShrink(0)
   }
 }

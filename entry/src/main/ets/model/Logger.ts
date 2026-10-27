@@ -17,27 +17,33 @@ import hilog from '@ohos.hilog'
 class Logger {
     private domain: number
     private prefix: string
-    private format: string = "%{public}s, %{public}s"
+    private format: string = "%{public}s"
 
     constructor(prefix: string) {
         this.prefix = prefix
         this.domain = 0xFF00
     }
 
+    // hilog 按占位符逐个消费变参；调用处传入的是多个分散参数，
+    // 统一拼接为单个字符串再交给单一占位符，避免占位符与参数错位
+    private formatArgs(args: any[]): string {
+        return args.map(arg => `${arg}`).join(' ')
+    }
+
     debug(...args: any[]) {
-        hilog.debug(this.domain, this.prefix, this.format, args)
+        hilog.debug(this.domain, this.prefix, this.format, this.formatArgs(args))
     }
 
     info(...args: any[]) {
-        hilog.info(this.domain, this.prefix, this.format, args)
+        hilog.info(this.domain, this.prefix, this.format, this.formatArgs(args))
     }
 
     warn(...args: any[]) {
-        hilog.warn(this.domain, this.prefix, this.format, args)
+        hilog.warn(this.domain, this.prefix, this.format, this.formatArgs(args))
     }
 
     error(...args: any[]) {
-        hilog.error(this.domain, this.prefix, this.format, args)
+        hilog.error(this.domain, this.prefix, this.format, this.formatArgs(args))
     }
 }
 

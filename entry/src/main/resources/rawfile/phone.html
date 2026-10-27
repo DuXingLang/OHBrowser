@@ -1,5 +1,9 @@
 <!DOCTYPE html>
 <html style="width:100%;height:100%;">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+</head>
 <style>
     .phone {
         justify-content:space-around;
@@ -61,13 +65,17 @@
     var isPhone = false;
     function initPhone() {
         console.info('function init')
-		this.isPhone = true
+		isPhone = true
 		func1()
 		console.info('function init end')
 	}
 	function initPad() {
-	    this.isPhone = false
+	    isPhone = false
 		func1()
+	}
+	// WebTab onPageEnd 时由 ArkTS 侧 runJavaScript 调用，手机页无需缩放适配，保持空实现
+	function adapterDevice() {
+	    console.info('function adapterDevice');
 	}
 	function uploadWord() {
         let inputDom = document.getElementById("searchCon")
@@ -134,7 +142,7 @@
         }
     }
  </script>
-<body style="height:98%;margin：0px" onload="initPhone()">
+<body style="height:100%;margin:0px" onload="initPhone()">
 <div style="display:flex;flex-direction:column;background-color:#fdfdfd;width:100%;height:100%">
     <div class="searchArea" style="border-radius: 60px; display: block; background-color: rgba(255, 255, 255, 0.7);flex-shrink: 0;">
         <div class="searchFirm" style="border-bottom-left-radius: 8px; border-top-left-radius: 8px;">
@@ -150,7 +158,7 @@
             <img src="./search.svg" style="width: 20px; height: 20px;">
         </div>
     </div>
-    <div id = "test"/>
+    <div id="test"></div>
 </div>
 </body >
 </html>

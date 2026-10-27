@@ -1,0 +1,12 @@
+{
+  "string": [
+    {
+      "name": "Input_url",
+      "value": "Enter URL"
+    },
+    {
+      "name": "MainAbility_label",
+      "value": "Browser"
+    }
+  ]
+}

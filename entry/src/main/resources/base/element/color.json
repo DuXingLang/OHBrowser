@@ -3,6 +3,42 @@
     {
       "name": "white",
       "value": "#FFFFFF"
+    },
+    {
+      "name": "page_bg",
+      "value": "#FDFDFD"
+    },
+    {
+      "name": "tab_bar_bg",
+      "value": "#ECECEC"
+    },
+    {
+      "name": "tab_active_bg",
+      "value": "#FFFFFF"
+    },
+    {
+      "name": "divider_color",
+      "value": "#C6C6C6"
+    },
+    {
+      "name": "divider_light",
+      "value": "#E9EAEC"
+    },
+    {
+      "name": "press_bg",
+      "value": "#E4E4E4"
+    },
+    {
+      "name": "transparent",
+      "value": "#00000000"
+    },
+    {
+      "name": "progress_blue",
+      "value": "#0A59F7"
+    },
+    {
+      "name": "text_primary",
+      "value": "#000000"
     }
   ]
 }

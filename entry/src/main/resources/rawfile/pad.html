@@ -58,8 +58,9 @@
     }
 </style>
 <script>
+	var isPhone = false;
 	function initPad() {
-	    this.isPhone = false;
+	    isPhone = false;
 		func1();
 	}
 	function adapterDevice() {
@@ -138,8 +139,8 @@
         return false;
     }
  </script>
-<body style="margin：0px; background-image: url(./backgroundImg.jpg);
-    background-size:cover;height:98% padding-bottom:60px" onload="initPad()">
+<body style="margin: 0px; background-image: url(./backgroundImg.jpg);
+    background-size:cover; height:100%; padding-bottom:60px" onload="initPad()">
 <div style="display:flex;flex-direction:column;width:100%;padding-bottom:60px">
     <div class="searchArea" style="border-radius: 20px; display: block; background-color: rgba(255, 255, 255, 0.7);flex-shrink: 0;">
         <div class="searchFirm" style="border-bottom-left-radius: 8px; border-top-left-radius: 8px;">

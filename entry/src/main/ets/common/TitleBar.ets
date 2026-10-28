@@ -41,6 +41,22 @@ const DISABLED_OPACITY: number = 0.38;
 const NEW_TAB_SIZE: number = 28;
 // 页签条内按钮相对条底部上移的偏移，使其在 40vp 高的页签条内垂直居中
 const TAB_STRIP_BUTTON_BOTTOM: number = (TAB_STRIP_HEIGHT - NEW_TAB_SIZE) / 2;
+// 页签间距、页签条左右内边距，以及页签条内按钮的左右外边距
+const TAB_SPACE: number = 4;
+const TAB_STRIP_PADDING: number = 4;
+const STRIP_BUTTON_MARGIN: number = 4;
+// 页签条右侧“关闭应用”按钮总占位：按钮宽度 + 左右外边距
+const EXIT_BUTTON_TOTAL: number = NEW_TAB_SIZE + STRIP_BUTTON_MARGIN * 2;
+
+// 页签内容总宽（含页签之间的间距），用于判断页签是否已占满页签条
+function tabsTotalWidth(count: number): number {
+  return count > 0 ? count * TAB_WIDTH + (count - 1) * TAB_SPACE : 0;
+}
+
+// 页签滚动区可视宽度：页签条宽度减去左右内边距与右侧“关闭应用”按钮占位
+function tabsViewportWidth(stripWidth: number): number {
+  return stripWidth - TAB_STRIP_PADDING * 2 - EXIT_BUTTON_TOTAL;
+}
 
 interface ToolButtonItem {
   imageSrc: Resource,
@@ -51,6 +67,8 @@ interface ToolButtonItem {
 export struct TabletTitle {
   @Link browser: Browser;
   @State arrayIndex: number = 0;
+  // 页签条实测宽度（vp）：决定“+”按钮是跟随页签还是固定在右侧，0 表示尚未测量
+  @State stripWidth: number = 0;
   // 点击页签条最右侧的关闭按钮时退出应用，由 Index 注入实现
   onExitApp: () => void = () => {
   };
@@ -81,13 +99,36 @@ export struct TabletTitle {
     return 1;
   }
 
+  // 页签条宽度变化时刷新状态（Area.width 运行期为 number，Number() 兜底防御）
+  private updateStripWidth(width: number): void {
+    if (width > 0 && Math.abs(width - this.stripWidth) > 0.5) {
+      this.stripWidth = width;
+    }
+  }
+
+  // 页签（含“+”按钮）是否已占满页签滚动区：占满后“+”固定在右侧，不再随页签滚动
+  private isStripFull(): boolean {
+    const viewport: number = tabsViewportWidth(this.stripWidth);
+    if (viewport <= 0) {
+      return false;
+    }
+    return tabsTotalWidth(this.browser.webArray.length) + TAB_SPACE + NEW_TAB_SIZE > viewport;
+  }
+
+  // 滚动内容宽度：未占满时撑满可视区保证页签靠左，占满时按页签总宽横向滚动
+  private stripContentWidth(): number {
+    const plusWidth: number = this.isStripFull() ? 0 : TAB_SPACE + NEW_TAB_SIZE;
+    return Math.max(tabsViewportWidth(this.stripWidth),
+      tabsTotalWidth(this.browser.webArray.length) + plusWidth);
+  }
+
   build() {
     Column() {
-      // 页签条（Chrome 风格）：页签默认靠左排列、横向滚动；“新建页签”按钮紧跟最后一个页签，
-      // 页签条最右侧固定“关闭应用”按钮。激活页签白底顶部圆角，与下方工具栏融为一体。
+      // 页签条（Chrome 风格）：页签默认靠左排列、横向滚动；“新建页签”按钮在页签未占满时
+      // 紧跟最后一个页签，占满时固定在页签区右侧；页签条最右侧固定“关闭应用”按钮。
       Row() {
         Scroll() {
-          Row({ space: 4 }) {
+          Row({ space: TAB_SPACE }) {
             ForEach(this.browser.webArray, (item: WebKey, index: number) => {
               TabItem({
                 item: item,
@@ -108,21 +149,25 @@ export struct TabletTitle {
               })
             }, (item: WebKey) => item.timestamp.toString())
 
-            // 新建页签：跟随最后一个页签，位于滚动区内；按钮垂直居中于页签条
-            Button({ type: ButtonType.Normal, stateEffect: true }) {
-              Image($r('app.media.ic_public_add')).width(16).height(16)
+            // 新建页签：页签未占满时跟随最后一个页签，位于滚动区内；垂直居中于页签条
+            if (!this.isStripFull()) {
+              Button({ type: ButtonType.Normal, stateEffect: true }) {
+                Image($r('app.media.ic_public_add')).width(16).height(16)
+              }
+              .id('newTabButton')
+              .width(NEW_TAB_SIZE)
+              .height(NEW_TAB_SIZE)
+              .borderRadius(6)
+              .backgroundColor($r('app.color.transparent'))
+              .margin({ bottom: TAB_STRIP_BUTTON_BOTTOM })
+              .accessibilityText('新建页签')
+              .onClick((event: ClickEvent) => {
+                this.browser.addTab();
+              })
             }
-            .id('newTabButton')
-            .width(NEW_TAB_SIZE)
-            .height(NEW_TAB_SIZE)
-            .borderRadius(6)
-            .backgroundColor($r('app.color.transparent'))
-            .margin({ left: 4, bottom: TAB_STRIP_BUTTON_BOTTOM })
-            .accessibilityText('新建页签')
-            .onClick((event: ClickEvent) => {
-              this.browser.addTab();
-            })
           }
+          // 显式宽度：未占满时撑满可视区，页签才会稳定靠左而不是被居中
+          .width(this.stripContentWidth())
           .justifyContent(FlexAlign.Start)
           .alignItems(VerticalAlign.Bottom)
           .height('100%')
@@ -131,6 +176,23 @@ export struct TabletTitle {
         .scrollBar(BarState.Off)
         .layoutWeight(1)
         .height('100%')
+
+        // 页签占满后：新建页签固定在滚动区右侧，避免被滚出视野
+        if (this.isStripFull()) {
+          Button({ type: ButtonType.Normal, stateEffect: true }) {
+            Image($r('app.media.ic_public_add')).width(16).height(16)
+          }
+          .id('newTabButton')
+          .width(NEW_TAB_SIZE)
+          .height(NEW_TAB_SIZE)
+          .borderRadius(6)
+          .backgroundColor($r('app.color.transparent'))
+          .margin({ left: STRIP_BUTTON_MARGIN, bottom: TAB_STRIP_BUTTON_BOTTOM })
+          .accessibilityText('新建页签')
+          .onClick((event: ClickEvent) => {
+            this.browser.addTab();
+          })
+        }
 
         // 关闭应用：参照桌面 Chrome 右侧窗口控制区，点击退出当前浏览器应用
         Button({ type: ButtonType.Normal, stateEffect: true }) {
@@ -141,7 +203,7 @@ export struct TabletTitle {
         .height(NEW_TAB_SIZE)
         .borderRadius(6)
         .backgroundColor($r('app.color.transparent'))
-        .margin({ left: 4, right: 4, bottom: TAB_STRIP_BUTTON_BOTTOM })
+        .margin({ left: STRIP_BUTTON_MARGIN, right: STRIP_BUTTON_MARGIN, bottom: TAB_STRIP_BUTTON_BOTTOM })
         .accessibilityText('关闭应用')
         .onClick((event: ClickEvent) => {
           this.onExitApp();
@@ -149,9 +211,12 @@ export struct TabletTitle {
       }
       .width('100%')
       .height(TAB_STRIP_HEIGHT)
-      .padding({ left: 4, right: 4 })
+      .padding({ left: TAB_STRIP_PADDING, right: TAB_STRIP_PADDING })
       .backgroundColor($r('app.color.tab_bar_bg'))
       .alignItems(VerticalAlign.Bottom)
+      .onAreaChange((oldValue: Area, newValue: Area) => {
+        this.updateStripWidth(Number(newValue.width));
+      })
 
       Row() {
         ForEach(this.toolButton, (item: ToolButtonItem, index: number) => {
@@ -335,15 +400,41 @@ struct TabItem {
 @Component
 export struct BrowserTabs {
   @Link browser: Browser;
+  // 页签条实测宽度（vp）：决定“+”按钮是跟随页签还是固定在右侧，0 表示尚未测量
+  @State stripWidth: number = 0;
   // 点击页签条最右侧的关闭按钮时退出应用，由 Index 注入实现
   onExitApp: () => void = () => {
   };
 
+  // 页签条宽度变化时刷新状态（Area.width 运行期为 number，Number() 兜底防御）
+  private updateStripWidth(width: number): void {
+    if (width > 0 && Math.abs(width - this.stripWidth) > 0.5) {
+      this.stripWidth = width;
+    }
+  }
+
+  // 页签（含“+”按钮）是否已占满页签滚动区：占满后“+”固定在右侧，不再随页签滚动
+  private isStripFull(): boolean {
+    const viewport: number = tabsViewportWidth(this.stripWidth);
+    if (viewport <= 0) {
+      return false;
+    }
+    return tabsTotalWidth(this.browser.webArray.length) + TAB_SPACE + NEW_TAB_SIZE > viewport;
+  }
+
+  // 滚动内容宽度：未占满时撑满可视区保证页签靠左，占满时按页签总宽横向滚动
+  private stripContentWidth(): number {
+    const plusWidth: number = this.isStripFull() ? 0 : TAB_SPACE + NEW_TAB_SIZE;
+    return Math.max(tabsViewportWidth(this.stripWidth),
+      tabsTotalWidth(this.browser.webArray.length) + plusWidth);
+  }
+
   build() {
     Row() {
-      // 页签数量多于一屏时可横向滚动，避免多余页签被裁掉、无法切换
+      // 页签数量多于一屏时可横向滚动，避免多余页签被裁掉、无法切换；
+      // 页签未占满时“+”紧跟最后一个页签，占满时固定在滚动区右侧
       Scroll() {
-        Row({ space: 4 }) {
+        Row({ space: TAB_SPACE }) {
           ForEach(this.browser.webArray, (item: WebKey, index: number) => {
             TabItem({
               item: item,
@@ -364,21 +455,25 @@ export struct BrowserTabs {
             })
           }, (item: WebKey) => item.timestamp.toString())
 
-          // 新建页签：跟随最后一个页签，位于滚动区内；按钮垂直居中于页签条
-          Button({ type: ButtonType.Normal, stateEffect: true }) {
-            Image($r('app.media.ic_public_add')).width(16).height(16)
+          // 新建页签：未占满时跟随最后一个页签，垂直居中于页签条
+          if (!this.isStripFull()) {
+            Button({ type: ButtonType.Normal, stateEffect: true }) {
+              Image($r('app.media.ic_public_add')).width(16).height(16)
+            }
+            .id('newTabButton')
+            .width(NEW_TAB_SIZE)
+            .height(NEW_TAB_SIZE)
+            .borderRadius(6)
+            .backgroundColor($r('app.color.transparent'))
+            .margin({ bottom: TAB_STRIP_BUTTON_BOTTOM })
+            .accessibilityText('新建页签')
+            .onClick((event: ClickEvent) => {
+              this.browser.addTab();
+            })
           }
-          .id('newTabButton')
-          .width(NEW_TAB_SIZE)
-          .height(NEW_TAB_SIZE)
-          .borderRadius(6)
-          .backgroundColor($r('app.color.transparent'))
-          .margin({ left: 4, bottom: TAB_STRIP_BUTTON_BOTTOM })
-          .accessibilityText('新建页签')
-          .onClick((event: ClickEvent) => {
-            this.browser.addTab();
-          })
         }
+        // 显式宽度：未占满时撑满可视区，页签才会稳定靠左而不是被居中
+        .width(this.stripContentWidth())
         .justifyContent(FlexAlign.Start)
         .alignItems(VerticalAlign.Bottom)
         .height('100%')
@@ -387,6 +482,23 @@ export struct BrowserTabs {
       .scrollBar(BarState.Off)
       .layoutWeight(1)
       .height('100%')
+
+      // 页签占满后：新建页签固定在滚动区右侧，避免被滚出视野
+      if (this.isStripFull()) {
+        Button({ type: ButtonType.Normal, stateEffect: true }) {
+          Image($r('app.media.ic_public_add')).width(16).height(16)
+        }
+        .id('newTabButton')
+        .width(NEW_TAB_SIZE)
+        .height(NEW_TAB_SIZE)
+        .borderRadius(6)
+        .backgroundColor($r('app.color.transparent'))
+        .margin({ left: STRIP_BUTTON_MARGIN, bottom: TAB_STRIP_BUTTON_BOTTOM })
+        .accessibilityText('新建页签')
+        .onClick((event: ClickEvent) => {
+          this.browser.addTab();
+        })
+      }
 
       // 关闭应用：参照桌面 Chrome 右侧窗口控制区，点击退出当前浏览器应用
       Button({ type: ButtonType.Normal, stateEffect: true }) {
@@ -397,7 +509,7 @@ export struct BrowserTabs {
       .height(NEW_TAB_SIZE)
       .borderRadius(6)
       .backgroundColor($r('app.color.transparent'))
-      .margin({ left: 4, right: 4, bottom: TAB_STRIP_BUTTON_BOTTOM })
+      .margin({ left: STRIP_BUTTON_MARGIN, right: STRIP_BUTTON_MARGIN, bottom: TAB_STRIP_BUTTON_BOTTOM })
       .accessibilityText('关闭应用')
       .onClick((event: ClickEvent) => {
         this.onExitApp();
@@ -405,10 +517,13 @@ export struct BrowserTabs {
     }
     .width('100%')
     .height(TAB_STRIP_HEIGHT)
-    .padding({ left: 4, right: 4 })
+    .padding({ left: TAB_STRIP_PADDING, right: TAB_STRIP_PADDING })
     .flexShrink(0)
     .backgroundColor($r('app.color.tab_bar_bg'))
     .alignItems(VerticalAlign.Bottom)
+    .onAreaChange((oldValue: Area, newValue: Area) => {
+      this.updateStripWidth(Number(newValue.width));
+    })
   }
 }
 

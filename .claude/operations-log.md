@@ -89,3 +89,9 @@
 58. 修复：`entry/src/main/ets/model/Browser.ets:308`、`407` 去 `webview.` 前缀；`entry/src/main/ets/common/TitleBar.ets:396` 改 `WebDarkMode.On / WebDarkMode.Auto`；`TitleBar.ets` 删除已无用的 `import webview`；两处补中文注释说明归属。
 59. 防回归：`tests/check-structure.mjs:418-432` 新增 4.3 规则（`WEB_GLOBAL_SYMBOLS` 命中 `webview.WebDarkMode` / `webview.FullScreenExitHandler` 即失败），配套 `maskComments`（`:43-97`）把注释替换为等长空格后匹配；用临时探针文件验证规则确实报 2 条错，删除后恢复通过。
 60. 验证：`node --test` 20 pass / 0 fail；`check-json5` 8 个通过；`check-resources` 23 文件 83 处引用；`check-structure` 23 文件 38 导入 / 7 ForEach / 8 TAG / 6 个 @ObjectLink 组件 8 处调用 / 4 HTML。文档：HANDOFF.md 增第八轮小节、修正踩坑 18、补待真机确认项与文件地图；新增 `.claude/context-summary-webview-symbols-fix.md` 与 `.claude/verification-report-webview-symbols-fix.md`（自评 95 分）。工作区改动未提交（用户未要求）。
+
+### 第九轮：全量 API 审计 + 交接文档与 README 同步
+61. 审计（用户要求「检查系统是否还有类似的错误或者其他错误」）：本机无 DevEco/SDK，改为「源码 × `.git/dsh-docs/` 官方 API 12 文档」全量核对——Web 组件属性 15 项、事件 13 项、WebviewController 方法 12 项、枚举 3 组（MixedMode/CacheMode/WebDarkMode）、WebOptions.controller 必填性，以及 Browser/TitleBar/PhoneLayout/MoreMenu/FindBar/BookmarkPanel/HistoryPanel/Index 的全部调用点。结论：除第八轮 3 条外无其他编译错误；两处文档差异（`setWebController` 签名行未写 `null` 但正文允许传 `null`；`onFullScreenEnter` 标 9+ 而回调类型标 12+）在 API 12 下均不构成构建问题。
+62. 交接文档：按「任务 / 现状必读 / 卡在哪 / 下一步计划 / 设计事实 / 待真机确认 / 验证 / 踩坑 / 文件地图 / 环境备忘」重写 HANDOFF.md（十节；头部标注当前 HEAD 6055add 未推送、新会话先读哪几节；补「文档来源」与 API 12 真实签名清单、符号归属；踩坑补第 31 条「文档签名与正文不一致时以构建为准」）。
+63. README.md 同步：使用说明补第 14 条（window.open 承接 / window.close 关闭页签）；工程目录补 rawfile 三个 HTML；具体实现补「编译兼容性」（Web 全局符号裸写）与「新窗口与窗口关闭」；新增「开发文档」小节指向 HANDOFF 与 `.claude/`；约束与限制补静态检查基线数字；检查器条目补 4.3 全局符号归属规则。
+64. 验证：文档改动不影响代码，`node --test` 20 pass / 0 fail；三项静态检查与基线一致（23 文件 38 导入 / 7 ForEach / 8 TAG / 6 个 @ObjectLink 组件 8 处调用 / 4 HTML；8 个 json5；83 处源码资源引用与 16 处配置引用）。文档提交见本轮 commit（未推送，`github.com:443` 被阻断）。

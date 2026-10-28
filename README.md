@@ -1,7 +1,7 @@
 # 浏览器
 
 ### 介绍
-本示例基于 [Web 组件](https://docs.openharmony.cn/pages/v5.0/zh-cn/application-dev/reference/apis-arkweb/js-apis-web.md)展示了一个浏览器的基本功能：展示网页、多页签管理、根据页面历史栈前进回退等，并适配手机与平板（横屏/竖屏）两种窗口形态。
+本示例基于 [Web 组件](https://docs.openharmony.cn/pages/v5.0/zh-cn/application-dev/reference/apis-arkweb/js-apis-web.md)展示了一个浏览器的基本功能：展示网页、多页签管理、根据页面历史栈前进回退、页面内查找、书签与历史记录等，并适配手机与平板（横屏/竖屏）两种窗口形态。
 
 ### 效果预览
 
@@ -21,8 +21,9 @@
 9. 页面内触发的下载会保存到应用沙箱 `files/Download/` 目录并弹出开始/完成提示；网页视频等请求全屏时自动隐藏标题栏与工具栏，按返回键先退出全屏;
 10. 页签会显示站点图标（取不到时回退为内置图标），主文档 4xx/5xx 与渲染进程异常会给出提示;
 11. 「更多」菜单的「在页面中查找」会在标题栏下方展开查找条，输入关键字实时高亮，显示 `当前/总数`，可上一个/下一个跳转，关闭时清除高亮;
-12. 「更多」菜单的「收藏当前页」把当前网址存入书签，「书签」展开书签面板可点击跳转或删除；书签通过首选项持久化，重启应用后仍在（本地首页等非 http 页面不可收藏）。
-13. 「更多」菜单的「历史记录」展开历史面板，展示最近访问记录（上限 200 条，同址去重、最近在前），可点击跳转、单条删除或一键清空；历史同样通过首选项持久化，「清除浏览数据」会一并清空。
+12. 「更多」菜单的「收藏当前页」把当前网址存入书签，「书签」展开书签面板可点击跳转或删除；书签通过首选项持久化，重启应用后仍在（本地首页等非 http 页面不可收藏）;
+13. 「更多」菜单的「历史记录」展开历史面板，展示最近访问记录（上限 200 条，同址去重、最近在前），可点击跳转、单条删除或一键清空；历史同样通过首选项持久化，「清除浏览数据」会一并清空;
+14. 网页通过 `window.open` 打开新窗口时会新建页签承接；网页调用 `window.close()` 时关闭对应页签。
 
 ### 工程目录
 ```
@@ -34,10 +35,10 @@ entry/src/main/ets/
 |---common
 |   |---PhoneLayout.ets                         // 手机端地址栏与底部工具栏
 |   |---TitleBar.ets                            // 平板端标题栏、页签条与 Web 组件
-|   |---MoreMenu.ets                            // 「更多」菜单（缩放/桌面版/深色/缓存/清除数据/查找/书签）
+|   |---MoreMenu.ets                            // 「更多」菜单（缩放/桌面版/深色/缓存/清除数据/查找/书签/历史）
 |   |---FindBar.ets                             // 页面内查找条（上一个/下一个/匹配计数）
 |   |---BookmarkPanel.ets                       // 书签面板（收藏当前页/跳转/删除）
-|   |---HistoryPanel.ets                       // 历史记录面板（跳转/删除/清空）
+|   |---HistoryPanel.ets                        // 历史记录面板（跳转/删除/清空）
 |---model
 |   |---Logger.ts                               // 日志工具
 |   |---Browser.ets                             // 浏览器实例
@@ -46,13 +47,17 @@ entry/src/main/ets/
 |   |---BookmarkStore.ets                       // 书签状态与首选项持久化
 |   |---HistoryList.ts                          // 历史记录纯函数（去重/上限/时间格式化）
 |   |---HistoryStore.ets                        // 历史状态与首选项持久化
+entry/src/main/resources/rawfile/
+|---phone.html                                  // 手机首页（自绘深浅色 + 自适应栅格）
+|---pad.html                                    // 平板 / 2in1 首页
+|---test.html                                   // 演示网页
 tests/
 |---formatUrl.test.mjs                          // 单元测试（node --test）
 |---bookmark.test.mjs                           // 书签序列化单元测试
-|---history.test.mjs                             // 历史记录单元测试
+|---history.test.mjs                            // 历史记录单元测试
 |---check-json5.mjs                             // 静态检查：json5 配置可解析
 |---check-resources.mjs                         // 静态检查：$r/$rawfile 与配置资源引用均已定义
-|---check-structure.mjs                         // 静态检查：导入符号、ForEach 三参数、TAG 声明、@ObjectLink 传参、rawfile HTML 结构
+|---check-structure.mjs                         // 静态检查：导入符号、ForEach 三参数、TAG 声明、@ObjectLink 传参、Web 全局符号归属、rawfile HTML 结构
 ```
 
 ### 具体实现
@@ -90,6 +95,14 @@ tests/
   + 页面加载完成（`onPageEnd`）时把当前地址与标题记入历史，`recordHistory` 只接受 http 页面，本地首页与 about:blank 不入库;
   + 纯函数 `addHistory` 同址去重并提到最前，上限 `HISTORY_MAX_COUNT=200`，超出丢弃最旧；序列化/解析/标题兜底复用书签的实现（结构一致），因此 `HistoryList.ts` 不 import 任何模块、可被 `node --test` 直接加载;
   + 历史状态放在 `@Observed HistoryStore` 上，面板用 @ObjectLink 绑定；`clearBrowsingData()` 会一并调用 `historyStore.clear()`，避免「清除浏览数据」后历史面板仍有残留;
++ 编译兼容性：`WebDarkMode`、`FullScreenExitHandler`、`MixedMode`、`CacheMode` 属于 Web 组件的全局声明（`component/web.d.ts`），必须裸写；写成 `webview.WebDarkMode` / `webview.FullScreenExitHandler` 会报 `Namespace 'webview' has no exported member` 或 `Property ... does not exist on type 'typeof webview'`（第八轮已修复，`check-structure.mjs` 的 4.3 规则会拦截此类误写）;
++ 新窗口与窗口关闭：网页 `window.open` 通过 `onWindowNew` 回调承接（必须调用 `handler.setWebController(...)`，拒绝开窗传 `null`），新建页签的 `src` 留空以保留 popup 首次 `document.write` 内容；网页 `window.close()` 经 `onWindowExit` 用时间戳反查页签后关闭。
+
+### 开发文档
+
+- [HANDOFF.md](HANDOFF.md)：会话交接文档（任务、已完成能力、当前卡点、下一步计划、API 12 设计事实与踩坑），新会话接手先读;
+- [.claude/operations-log.md](.claude/operations-log.md)：各轮操作日志;
+- `.claude/` 下另有各轮的上下文摘要（context-summary-*.md）与验证报告（verification-report-*.md）。
 
 ### 相关权限
 
@@ -106,7 +119,7 @@ tests/
 1. 本示例仅支持标准系统上运行;
 2. 本示例已适配API version 12版本SDK（OpenHarmony 5.0.0 Release），版本号：5.0.0.12;
 3. 本示例需要使用DevEco Studio 5.0.0及以上版本（配套hvigor 3.0.9）才可编译运行;
-4. 单元测试与静态检查依赖Node.js 22.6+：根目录执行 `node --test` 运行单测，依次执行 `node tests/check-json5.mjs`、`node tests/check-resources.mjs`、`node tests/check-structure.mjs` 运行静态检查（工程不提供 npm 脚本，避免根目录 package.json 与 oh-package.json5 冲突）。
+4. 单元测试与静态检查依赖Node.js 22.6+：根目录执行 `node --test` 运行单测，依次执行 `node tests/check-json5.mjs`、`node tests/check-resources.mjs`、`node tests/check-structure.mjs` 运行静态检查（工程不提供 npm 脚本，避免根目录 package.json 与 oh-package.json5 冲突）。当前基线：单测 20 通过；8 个 json5 配置通过；23 个源文件 83 处源码资源引用、4 个配置文件 16 处配置引用命中；23 个源文件 38 处相对导入、7 处 ForEach、8 处 TAG 声明、6 个 @ObjectLink 组件 8 处调用、4 个 rawfile HTML 全部通过。
 
 ### 下载
 

@@ -1,49 +1,102 @@
 # HANDOFF — OpenHarmony Browser 示例优化（会话交接）
 
-> 写给零上下文的新会话。接手前请通读本文，尤其是最后的“踩坑清单”。
-> 更新时间：2026-10-28 15:10 · 工作目录 `D:\project\Browser` · Git 流程：`2056c72`（原版）→ `164919b`（第一轮）→ `90d35e7`（第二轮）→ `5e6ccb5`（第三轮）→ `45cff8e`（第四轮）→ `edd5171`（第五轮）→ `5c51869`（第六轮）→ `c866326`（第七轮，文档）→ 本轮（第八轮，编译错误修复，工作区未提交）
+> 写给零上下文的新会话：先读「一、任务」「二、现状必读」「三、卡在哪」「四、下一步计划」「八、踩坑」，其余按需查阅。
+> 更新时间：2026-10-28 · 工作目录 `D:\project\Browser` · 分支 `master` · 当前 HEAD `6055add`（第八轮修复已提交，**未推送**）
 
 ---
 
-## 一、我们在做什么任务
+## 一、任务
 
-基于开源项目 [applications_app_samples 的 Browser 示例](https://gitcode.com/openharmony/applications_app_samples/tree/master/code/BasicFeature/Web/Browser)（本仓库为其独立检出，git 基线 `2056c72`，原为 API 9 版本），满足四项用户需求：
+基于开源项目 [applications_app_samples 的 Browser 示例](https://gitcode.com/openharmony/applications_app_samples/tree/master/code/BasicFeature/Web/Browser)（本仓库为其独立检出，git 基线 `2056c72`，原为 API 9 版本），满足用户四项需求：
 
 1. **修复系统 bug**
 2. **优化界面样式与用户体验**
 3. **适配不同屏幕分辨率（横屏/竖屏）**
 4. **基于 OpenHarmony 5.x（API 12）迁移并完善功能**
 
-用户没有提出超出这四项的需求；全程中文交付（CLAUDE.md 要求）。
+约束：全程中文交付（CLAUDE.md）；不引入用户未要求的新功能；改前先读文件；`.claude/` 三件套（上下文摘要 / 验证报告 / 操作日志）+ 自评 ≥90。
 
-## 二、当前状态
+## 二、现状必读
 
-- 第一轮（`164919b`，25 文件 +733/−315）：5.x 迁移、核心重写、深浅色资源、HTML 语法修复、首页布局、formatUrl 单测。
-- 第二轮（`90d35e7`）：补齐**静态测试层**，据此找出并修复 10 项缺陷；布局判定改为窗口宽度断点；首页 HTML 改自绘深浅色 + 自适应栅格；文档三件套同步。
-- 第三轮（本轮）：修复新增页签崩溃（17100001）、顶栏按 Chrome 风格重做（页签条 + 药丸地址栏 + 圆形按钮）、删除与 oh-package.json5 冲突的根目录 package.json、首页新增百度快捷入口。
-- 第四轮（`45cff8e`，已推送）：按 OpenHarmony 5.0.3 官方 ArkWeb 文档补齐能力（缩放 / 桌面版 UA / 强制深色 / 缓存策略 / 清除浏览数据 / 下载 / 页签图标 / 网页全屏 / HTTP 与渲染异常提示），顺带修复 `PhoneLayout.ets` 使用未声明 `TAG` 的编译级缺陷，并给静态检查器加了 TAG 与 @ObjectLink 传参两类规则。
-- 第五轮（`edd5171`，已推送）：页面内查找（`searchAllAsync`/`searchNext`/`clearMatches` + `onSearchResultReceive`）与书签（纯函数序列化 + preferences 持久化 + 面板），补 7 个书签单测。
-- 第六轮（`5c51869`，已推送）：`window.open` 新页签支持（`onWindowNew`/`onWindowExit` + `allowWindowOpenMethod`）与历史记录（纯函数去重/上限 + preferences 持久化 + 面板），补 6 个历史单测。
+### 提交链
 
-**第七轮（`c866326`，已推送）**：仅更新本交接文档使其与实际提交一致，无代码改动。
+`2056c72`（原版）→ `164919b`（一轮）→ `90d35e7`（二轮）→ `5e6ccb5`（三轮）→ `45cff8e`（四轮）→ `edd5171`（五轮）→ `5c51869`（六轮）→ `c866326`（七轮，文档）→ **`6055add`（八轮，编译错误修复，7 文件 +204/−10，未推送）**
 
-**第八轮（本轮，未提交）**：修复用户 DevEco 构建报出的 3 条编译错误——`WebDarkMode` 与 `FullScreenExitHandler` 被误写成 `webview.` 命名空间成员（`Browser.ets:405:39`、`TitleBar.ets:396:57`、`396:82`，另有 `Browser.ets:306` 同类字段）；`tests/check-structure.mjs` 新增规则拦截同类误写。
+### 一句话现状
 
-## 三、当前卡在哪（环境限制，非代码问题）
+四项需求对应的能力都已实现（5.x 迁移、界面重做、响应式、页签/查找/书签/历史/下载/全屏等）；用户在有 DevEco 的机器上编译报出的 3 条 `webview.WebDarkMode` / `webview.FullScreenExitHandler` 错误已在第八轮修复并提交；本会话（第九轮）做了全量「源码 × 官方文档」审计，结论是**没有其他同类或新增编译错误**，只补了文档。**工作区干净。**
 
-- **卡点只有一个**：本机没有 DevEco Studio / OpenHarmony SDK / hvigorw，**无法编译 ArkTS、无法真机运行**。因此所有 ArkTS 改动都只能靠「Node 单测 + 三项静态检查 + 人工审查」保证，编译级错误与真机行为要到有 SDK 的环境复核。
-- 无阻塞性技术问题；六轮功能均已提交并推送到 GitHub 远端。
+### 已完成能力（按轮次）
 
-## 四、验证怎么跑（本机可跑，无需 SDK）
+- 一轮（`164919b`，25 文件 +733/−315）：5.x 迁移、核心重写、深浅色资源、HTML 语法修复、首页布局、formatUrl 单测。
+- 二轮（`90d35e7`）：补齐静态测试层并据此修 10 项缺陷；布局判定改为窗口宽度断点；首页 HTML 自绘深浅色 + 自适应栅格。
+- 三轮（`5e6ccb5`）：修新增页签崩溃（17100001）；Chrome 风格顶栏（页签条 + 药丸地址栏 + 圆形按钮）；删除与 `oh-package.json5` 冲突的根目录 `package.json`；首页加百度快捷入口。
+- 四轮（`45cff8e`）：按官方 ArkWeb 文档补缩放 / 桌面版 UA / 强制深色 / 缓存策略 / 清除浏览数据 / 下载 / 页签图标 / 网页全屏 / 异常提示；修 `PhoneLayout.ets` 未声明 `TAG`；检查器加 TAG 与 @ObjectLink 规则。
+- 五轮（`edd5171`）：页面内查找（搜索三接口 + 结果事件）与书签（纯函数 + preferences 持久化 + 面板），补 7 个书签单测。
+- 六轮（`5c51869`）：`window.open` 新页签（`onWindowNew`/`onWindowExit` + `allowWindowOpenMethod`）与历史记录（纯函数 + preferences + 面板），补 6 个历史单测。
+- 七轮（`c866326`）：仅更新交接文档。
+- 八轮（`6055add`）：修 3 条编译错误（命名空间误写）；`check-structure.mjs` 新增 4.3 规则防回归；文档同步。
+- 九轮（本会话，收尾）：全量审计（未发现其他编译错误）+ 重写本交接文档；无代码改动。
+
+### 源码规模
+
+16 个 ets/ts 源文件、4 个 rawfile HTML、6 个 json5 配置。
+
+## 三、卡在哪（唯一卡点）
+
+本机**没有 DevEco Studio / OpenHarmony SDK / hvigorw**（`DEVECO_SDK_HOME`、`HOS_SDK_HOME`、`OHOS_SDK` 均空；`C:\Program Files\Huawei`、`D:\Huawei`、`%LOCALAPPDATA%\Huawei` 均不存在），因此：
+
+- **无法编译 ArkTS、无法真机运行**；所有 ArkTS 改动只能靠「Node 单测 + 三项静态检查 + 人工对照官方文档」保证。
+- 编译级错误与运行时行为必须在有 SDK 的环境复核。
+
+**新会话接手时第一件事：请用户在有 DevEco 的机器上整包重编译一次。** 构建输出里的 `ERROR: ArkTS:ERROR File: ...:行:列 ...` 是唯一可信判据。
+
+## 四、下一步计划（按优先级）
+
+1. **【最高】等用户整包重编译**：确认第八轮修的 3 条错误消失、且没有新 ERROR。有新报错时：报错行号 → 在 `.git/dsh-docs/` 里 grep 对应签名 → 最小改动。
+2. **【高】推送当前提交**（本机 `github.com:443` 被阻断）：
+   `git push ssh://git@ssh.github.com:443/DuXingLang/OHBrowser.git master`
+   （`origin` 保持 https 不动；PowerShell 会把 git 的 stderr 当错误，输出 `master -> master` 后 exit 1 属正常。）
+3. **【高】真机手测**（清单见第六节）。
+4. **【中】检查器增强**：把 `tests/check-structure.mjs` 的 4.3 规则从「只拦 `webview.WebDarkMode` / `webview.FullScreenExitHandler`」扩展为「Web 组件全局符号白名单」，同类误写在静态检查阶段就拦住。
+5. **【低，尚未获用户要求，先问再动】** 可选增强：书签/历史导出、下载管理面板等。
+
+## 五、改代码前必读的设计事实
+
+- **文档来源**：gitee `OpenHarmony-5.0.3-Release` 分支的 `js-apis-webview.md`、`ts-basic-components-web.md`；本地副本在 `.git/dsh-docs/`（`web-attr.md` 10,428 行、`webview.md` 17,138 行、`preferences.md`）。改任何 webview/Web 调用前先在这里 grep 签名，**不要信网上 API 14+ 的名字**（`findAllAsync`/`findNext`/`flushSync` 在 API 12 都不存在）。
+- **符号归属（第八轮教训）**：`WebDarkMode`、`FullScreenExitHandler`、`MixedMode`、`CacheMode` 声明在 Web 组件侧 `component/web.d.ts` 的**全局作用域**，必须裸写；`WebviewController` / `WebDownloadDelegate` / `WebDownloadItem` / `WebCookieManager` / `WebStorage` 才在 `@ohos.web.webview` 命名空间。
+- **API 12 真实签名**：`loadUrl(url: string | Resource, headers?)`、`accessBackward(): boolean`、`backward(): void`、`refresh(): void`、`zoom(factor: number): void`（相对倍数）、`getUserAgent(): string`、`setCustomUserAgent(userAgent: string)`、`getTitle()`、`getUrl()`、`runJavaScript(script: string): Promise<string>`（单参重载）、`searchAllAsync(searchString: string)`、`searchNext(forward: boolean)`、`clearMatches()`、`clearHistory()`、`registerJavaScriptProxy(object, name, methodList, ...)`、`setDownloadDelegate(delegate)`。
+- **事件字段**：`OnWindowNewEvent{isAlert, isUserTrigger, targetUrl, handler}`、`FullScreenEnterEvent{handler: FullScreenExitHandler}`、`OnSearchResultReceiveEvent{activeMatchOrdinal, numberOfMatches, isDoneCounting}`、`OnPageBeginEvent/OnPageEndEvent{url}`、`OnProgressChangeEvent{newProgress}`、`OnErrorReceiveEvent{request, error}`、`OnHttpErrorReceiveEvent{request, response}`、`OnRenderExitedEvent{renderExitReason}`、`OnFaviconReceivedEvent{favicon: PixelMap}`。
+- **枚举值**：`MixedMode{All=0, Compatible=1, None=2}`、`CacheMode{Default=0, None=1, Online=2, Only=3}`、`WebDarkMode{Off=0, On=1, Auto=2}`。
+- **UI 状态对象**：`Browser` 不是 @Observed，直接加会驱动 UI 的字段不会刷新；联动态放 `WebSettings`（@Observed，@ObjectLink 绑定）或 `@Observed WebKey.favicon/title`；`BookmarkStore`/`HistoryStore` 同理。
+- **Web 未挂载时**：`accessBackward`/`accessForward`/`loadUrl` 等会抛 17100001（`The WebviewController must be associated with a Web component`），必须 try/catch（三轮已因此崩过）。
+- **页签**：上限 `MAX_TAB_COUNT=10`；`WebTab` 必须常驻组件树（if 分支外 + `.layoutWeight(1)`），旋转不重载；`window.open` 承接页签 `src` 必须留空（`item.blank ? '' : 首页`），否则会顶掉内核跳转。
+- **窗口**：`onWindowNew` 里必须调 `handler.setWebController(...)`（拒绝开窗传 `null`，文档正文明确允许），否则渲染进程阻塞；`allowWindowOpenMethod(true)` 不开则 `window.open` 被静默拦截；`onWindowExit`（网页 `window.close()`）用 `timestamp` 反查页签下标（关闭后 key 会重编号）。
+- **查找**：`activeMatchOrdinal` 从 0 开始，展示要 +1；无匹配显示 `0/0` 并置灰上/下一个；`onPageBegin` 时 `resetFindResult()` 只清计数、不收起查找条。
+- **下载**：`onBeforeDownload` 里必须 `item.start(dir + item.getSuggestedFileName())` 才会真正开始（否则永远 PENDING）；落盘目录 `getContext(this).filesDir + '/Download/'`（沙箱内，免权限）；委托对象必须由 `Browser` 持有引用，否则被回收。
+- **全屏**：`onFullScreenEnter(event.handler)` 保存 `FullScreenExitHandler`；退出调用 `handler.exitFullScreen()`；`onBackPress` 在全屏时优先退出全屏。
+- **持久化**：`preferences.getPreferencesSync(context, { name: 'browser_store' })` + `putSync`/`getSync` + `flush()`（**没有 flushSync**）；书签上限 50、历史上限 200，序列化/解析复用 `BookmarkList`。
+- **首页与响应式**：`homeIsPhone` 只在启动时确定一次（手机 phone.html / 平板·2in1 pad.html / 未知按启动宽度），Web 的 `src` 运行期不变；布局用 `mediaquery.matchMediaSync('(width<600vp)')`，查询异常退回 `deviceInfo.deviceType`。
+- **图标白名单**：只有 `ic_public_add/advance/back/cancel_filled/home/more_filled/navigation/refresh`、`icon.png`、`submit.png`；改图标前跑 `check-resources.mjs`。
+
+## 六、待真机确认清单
+
+- 第八轮：重新**整包编译**确认 3 条错误消失；全屏进出与 `forceDark` 深色适配仍正常。
+- 通用流程：手机竖屏/横屏各走一遍新增页签→切换→关闭→旋转；平板上限 10 页签；深色下首页与网页配色；无历史时按返回键应退出应用。
+- 第四轮能力：更多菜单 8 个入口逐项生效（切换缓存/深色后当前页自动刷新）、下载能落盘到 `files/Download/`、视频全屏进出、页签图标刷新、断网错误提示文案。
+- 查找/书签：中文关键字匹配计数、跨页后计数归零、面板在小屏与横屏下的高度与滚动、重启后书签仍在（`flush()` 是否真正落盘）、同址重复收藏只剩一条。
+- window.open/历史：10 页签上限时正确拒绝、`onWindowExit` 后页签关闭、历史面板布局、重启后历史仍在、`clearBrowsingData` 同时清空历史。
+
+## 七、验证怎么跑（本机可跑，无需 SDK）
 
 ```bash
 node --test                     # 单元测试：20 用例（formatUrl 7 + 书签 7 + 历史 6）
-node tests/check-json5.mjs      # 静态检查：json5 配置可解析
-node tests/check-resources.mjs  # 静态检查：资源引用均已定义
-node tests/check-structure.mjs  # 静态检查：导入符号 / ForEach / rawfile HTML
+node tests/check-json5.mjs      # json5 配置可解析
+node tests/check-resources.mjs  # $r/$rawfile 与配置资源引用均已定义
+node tests/check-structure.mjs  # 导入符号 / ForEach / TAG / @ObjectLink 传参 / 全局符号归属 / rawfile HTML
 ```
 
-当前基线结果（改动后必须仍然全绿）：
+当前基线（改完必须仍然全绿）：
 
 ```
 node --test                    → 20 pass / 0 fail
@@ -52,184 +105,80 @@ node tests/check-resources.mjs → 23 个源文件 83 处源码资源引用、4 
 node tests/check-structure.mjs → 23 个源文件 38 处相对导入、7 处 ForEach、8 处 TAG 声明、6 个 @ObjectLink 组件 8 处调用、4 个 HTML 全部符合约束
 ```
 
-## 五、本轮关键改动（含“为什么”）
-
-### 静态测试层（新增，替代不可用的编译器）
-- `tests/check-resources.mjs`：把所有 `$r('app.type.name')`、`$rawfile('x')`、json5 里的 `$string:/$media:/$color:/$profile:` 与 base/dark/en_US/rawfile 实际定义逐条比对。**它抓出了编译必失败的资源缺失**。
-- `tests/check-structure.mjs`：相对导入的符号是否真被目标文件导出、ForEach 是否带 keyGenerator、rawfile HTML 的自闭合/全角标点/本地图片/getElementById/on* 函数/`etsObj.*` 注册一致性。
-- `package.json` 加 `npm run check`。
-
-### 缺陷修复（按严重度）
-1. `PhoneLayout.ets` 引用不存在的 `app.media.aa/bb/add/delete/fresh/home` → 全部映射真实素材（ic_public_back/add/cancel_filled/refresh/home/advance），**否则 HAP 构建直接失败**。
-2. 手机工具栏 6 个按钮 `width('20%')` 合计 120% 溢出 → `layoutWeight(1)`。
-3. 页签标题 `Row.width('100%')` 把 33vp 关闭按钮挤出屏幕 → 改 `Stack`，关闭按钮独立热区，顺带消除“一次点击同时触发选择+关闭”。
-4. `deleteTab` 可关闭最后一个页签（Tabs 无数据源）→ 守卫 + toast「至少保留一个页签」。
-5. 页签标题存在普通数组里，元素赋值不触发刷新 → 标题移入 `@Observed WebKey.title`，`TabItem` 用 `@ObjectLink` 渲染。
-6. 页签条不可滚动 → 横向 `Scroll` 包裹；手机布局页签数 >1 时补页签条。
-7. 前进/后退/关闭无禁用态 → `Browser.canBack/canForward` + `updateHistoryState()`（onPageEnd、进度 100、页签增删切时调用），按钮 0.4 置灰。
-8. `addTab` 上限判断 `>` 改 `>=`（原来能建到 11 个）。
-9. `.id(item.id)` 传数字 → 字符串模板 `toolButton${item.id}`。
-10. `test.html` 全角冒号与自闭合 div 修复。
-
-### 响应式（核心设计）
-- `Index.ets`：`mediaquery.matchMediaSync('(width<600vp)')` 决定布局，注册 `on('change')`、`aboutToDisappear` 注销；查询异常时退回 `deviceInfo.deviceType` 判定（**不能因为断点语法不可用就白屏**）。
-- `homeIsPhone` 只在启动时确定一次：手机→phone.html、平板/2in1→pad.html、形态未知按启动宽度；这样旋转时 Web 的 `src` 不变，配合 WebTab 常驻组件树，**旋转不重载、浏览状态不丢**。
-- 首页 HTML：CSS 变量 + `prefers-color-scheme` 自绘深浅色；站点区 `flex:1 + overflow-y:auto`；横屏/矮屏压缩留白；输入框左右留白修正。
-
-### 第三轮（崩溃修复 + Chrome 风格顶栏）
-- **17100001 崩溃**：`addTab`/`deleteTab` 后 50ms 调 `updateHistoryState()`，此时新页签的 Web 组件尚未挂载，`accessBackward()` 抛 `The WebviewController must be associated with a Web component`。修复：`updateHistoryState`、`Back`、`Forward` 与两处主页按钮 `loadUrl` 全部 try/catch 兜底（失败视为无历史）。
-- **顶栏重做（Chrome 风格）**：`TabletTitle` = 页签条（横向可滚动 + 新建页签按钮）+ 工具栏（圆形前进/后退/主页 + 药丸地址栏 + 刷新）；手机 `PhoneHeader` 改药丸地址栏，`PhoneToolBar` 改 5 键均分；索引页签条不再重复渲染。
-- **配色**：base/dark `color.json` 换 Chrome 调色板（`omnibox_bg` #F1F3F4/#202124、`text_primary`、`fg_secondary` 等）。
-- **删除根目录 package.json**：与 `oh-package.json5` 重复导致无法编译打包；测试改为直接 `node` 执行，不再依赖 npm 脚本。
-- **首页新增百度快捷入口**：`phone.html` / `pad.html` 站点数组首位加入 `./baidu.png` → `baidu.com`。
-
-### 第四轮（按官方 ArkWeb 文档补功能）
-文档来源：`docs.openharmony.cn` 的 v5.0.3 页面返回 404，最终以 gitee 仓库 `OpenHarmony-5.0.3-Release` 分支下的 `js-apis-webview.md` 与 `ts-basic-components-web.md` 为准逐条核对签名，**没有凭空发明 API**。
-
-- **状态对象 `WebSettings`（@Observed）**：`desktopMode`/`forceDark`/`noCache`/`zoomScale`/`isFullScreen` 统一放在一个 @Observed 类里，菜单按钮与 Web 组件都通过 @ObjectLink 绑定。原因：`Browser` 本身不是 @Observed，散落在它上面的标量改了不会触发 UI 重建，`cacheMode`/`darkMode` 这类属性就不会重新下发。
-- **缩放**：`zoomAccess(true)` + `WebviewController.zoom(factor)`，factor 是**相对当前比例**的倍数，所以传 `目标倍数 / 当前倍数`，累计倍数夹在 0.5–4。
-- **桌面版 UA**：`getUserAgent()` 先备份 → `setCustomUserAgent(桌面 UA)` → `refresh()`；切回时用备份的移动版 UA。
-- **强制深色**：`darkMode(WebDarkMode.On)` + `forceDarkAccess(true)` 同一个开关；关闭回 `WebDarkMode.Auto`。
-- **缓存策略**：`cacheMode(CacheMode.None / CacheMode.Default)`，切换后自动刷新。
-- **清除浏览数据**：`clearHistory()` / `WebCookieManager.clearAllCookiesSync()` / `WebStorage.deleteAllData()` 三个各包一层 try/catch，一个失败不影响其余。
-- **下载**：`onControllerAttached` 里建 `WebDownloadDelegate` 并 `setDownloadDelegate`；`onBeforeDownload` 必须 `item.start(dir + getSuggestedFileName())`，否则一直是 PENDING。落盘目录 `getContext(this).filesDir + '/Download/'`（沙箱内，不需要公共目录权限）。
-- **页签图标**：`onFaviconReceived` → `setTabFavicon(key, PixelMap)` → 写到 `@Observed WebKey.favicon`，TabItem 里 `if (favicon !== undefined)` 显示，否则回退内置图标。
-- **网页全屏**：`onFullScreenEnter` 保存 `FullScreenExitHandler` 并回调 Index 置 `webFullScreen=true` 隐藏标题栏/工具栏；`onFullScreenExit` 恢复；`onBackPress` 在全屏时优先退出全屏。
-- **异常提示**：`onErrorReceive`（加载失败）、`onHttpErrorReceive`（仅主文档且 code>=400 提示错误码）、`onRenderExited`（渲染进程被杀 → toast + refresh）。
-- **`PhoneLayout.ets` 编译级缺陷**：`Logger.error(TAG, ...)` 用了从未声明的 `TAG`（运行到该行只会拿到 undefined，编译期不报错）。已补 `const TAG: string = '[PhoneLayout]';`，并在 `check-structure.mjs` 加了「用了 TAG 必须自己声明」的规则。
-- **菜单组件 `MoreMenu.ets`**：`bindMenu(MenuElement[])`，手机/平板工具栏共用；手机端用 `Column().layoutWeight(1)` 包一层，保证 6 个入口等分热区。
-
-### 第五轮（页面内查找 + 书签持久化）
-
-文档仍然只从 gitee `OpenHarmony-5.0.3-Release` 分支的 Markdown 核对（本地副本 `.git/dsh-docs/webview.md`、`web-attr.md`）：
-
-- **5.0.3 的查找接口只有三个**：`searchAllAsync(searchString: string): void`（webview.md:2508）、`searchNext(forward: boolean): void`（webview.md:2623）、`clearMatches(): void`（webview.md:2577）。**没有 `findAllAsync` / `findNext`**，网上大量示例写的是 14+ 的新名字，照抄会编译不过。
-- **查找条 `FindBar.ets`**：与标题栏同级的一条 48vp 横条，`TextInput` 输入即搜（`onChange` → `searchInPage`），`Enter`/「下一个」→ `searchNext(true)`，「上一个」→ `searchNext(false)`，关闭 → `closeFindBar()`（内部 `clearMatches()` 清高亮）。
-- **匹配数从事件来**：`onSearchResultReceive((event) => ...)` 给出 `activeMatchOrdinal`（**从 0 开始**）与 `numberOfMatches`，界面显示 `${findIndex + 1}/${findTotal}`，无匹配显示 `0/0` 并把上一个/下一个置灰。
-- **跳转后旧结果失效**：`onPageBegin` 调 `resetFindResult()` 只清计数、不收起查找条（用户往往要在新页继续找）。
-- **书签纯函数抽离**：`model/BookmarkList.ts` 的 `addBookmark`/`removeBookmark`/`normalizeTitle`/`parseBookmarks`/`stringifyBookmarks` 不 import 任何 ArkUI/系统能力，因此能被 `tests/bookmark.test.mjs` 用 `node --test` 直接覆盖（7 用例：去重、上限截断、删除、标题兜底、脏数据、序列化往返）。
-- **持久化**：`preferences.getPreferencesSync(context, { name: 'browser_store' })` + `putSync`/`getSync`（Key `bookmarks`），写完 `flush()` 异步落盘。**API 12 没有 `flushSync`**（是 14+），只能 `flush()`。
-- **状态放 `@Observed BookmarkStore`**：`items`、`visible` 都在这个对象上，`BookmarkPanel` 用 `@ObjectLink` 绑定 → 收藏/删除后面板精确刷新。`Browser` 不是 @Observed，所以 `bookmarkStore` 只作为普通属性持有。
-- **收藏限制**：`controller.getUrl()` 不是 `http` 开头（本地 `$rawfile` 首页、`about:blank`）时提示「当前页面不支持收藏」，避免把 `file://` 路径写进书签。
-- **面板与查找条同级**：都在 `WebTab` 之上、只在 `!webFullScreen` 时渲染，占用固定高度内部滚动，**不改动 Web 组件在组件树中的位置**，所以展开/收起都不会让网页重载。
-- **Context 只在 Index 拿一次**：`Index.aboutToAppear()` / `onDeviceChange()` 里调 `browser.initBookmarks(getContext(this))`；UI 组件不各自持有 Context，避免生命周期不一致。
-
-### 第六轮（window.open 新页签 + 历史记录）
-
-文档仍从 gitee `OpenHarmony-5.0.3-Release` 分支核对（本地副本 `.git/dsh-docs/web-attr.md`）：
-
-- **`window.open` 必须接住新页签**：`onWindowNew(callback: Callback<OnWindowNewEvent>)`（web-attr.md:5358-5436）里**必须调用 `event.handler.setWebController(controller)`**，否则渲染进程阻塞；不创建新窗口时传 `null`。`OnWindowNewEvent`（web-attr.md:10209）字段：`isAlert`（true=对话框）、`isUserTrigger`、`targetUrl`、`handler`。`ControllerHandler.setWebController`（web-attr.md:7303-7315）文档明示“不需要打开新窗口请设置为 null”。
-- **`window.open` 默认被拦截**：`allowWindowOpenMethod(true)`（web-attr.md:1719-1744，默认 false，受系统属性 `persist.web.allowWindowOpenMethod.enabled` 控制）不开的话 JS `window.open` 会被静默拦截。
-- **旧实现的 bug（已修）**：原来把 `event.targetUrl` 直接 `loadUrl` 到**当前页签**并 `setWebController(null)`——会顶掉用户正在看的页面，且 JS 先 `open('about:blank')` 再 `document.write` 的 popup 内容整段丢失。
-- **新实现**：`WebKey.blank` 字段（`constructor(key, timestamp, title='主页', blank=false)`），blank 页签 `src` 留空（`item.blank ? '' : 首页`，参照官方 sample `Web({ src: '', controller: popController })`）；`Browser.openTabForWindow(targetUrl)` 超过 `MAX_TAB_COUNT` 时 toast「页签数量已满」并返回 null，否则 push controller + 新 `WebKey(..., NEW_TAB_TITLE='新页签', true)`，`setTimeout(50)` 里 `changeIndex` + `updateHistoryState`，返回 WebObject。onWindowNew：`created === null ? handler.setWebController(null) : handler.setWebController(created.controller)`。
-- **网页 `window.close()`**：`onWindowExit(callback: () => void)`（web-attr.md:5437-5471）；实现里用 `indexOfTimestamp(item.timestamp)` 反查下标后 `deleteTab(index)`（关闭页签后 key 会重编号，用 timestamp 才可靠）。
-- **历史纯函数**：`model/HistoryList.ts` 的 `addHistory`（同址去重 + 提到最前 + 上限 `HISTORY_MAX_COUNT=200` 丢最旧）、`removeHistory`、`formatHistoryTime`（`月-日 时:分`，时间戳缺失返回空串）**不 import 任何模块**——Node ESM 解析要求导入带扩展名而 ArkTS 源码省略扩展名（曾报 `ERR_MODULE_NOT_FOUND`），宁可让纯模块零依赖也不引入 loader hook。序列化/解析/标题兜底复用 `BookmarkList`（结构一致），因此 `HistoryStore` import `parseBookmarks`/`stringifyBookmarks` 后自行 `slice(0, HISTORY_MAX_COUNT)`。
-- **历史记录时机**：`onPageEnd` 里 `recordHistory(event.url, pageTitle)`，只接受 `http` 开头（本地首页/about:blank 不入库）；标题随页面一起取，避免记成“新页签”。
-- **`clearBrowsingData` 一并清历史**：清除浏览数据后调 `historyStore.clear()`，否则历史面板仍有残留。
-- **面板 `HistoryPanel.ets`**：与 `BookmarkPanel` 同构（标题「历史记录」+「清空」（无记录时置灰）+ 关闭按钮；列表行显示标题/域名兜底 + 地址 + 访问时间，整行点击跳转、右侧删除按钮），`constraintSize({ maxHeight: 320 })` 内部滚动。
-- **6 个历史单测**：`tests/history.test.mjs`（追加置顶、同址去重且更新为最新、空 URL 忽略、超上限丢最旧、删除、时间格式化）。
-
-### 第八轮（编译错误修复）
-
-用户在有 DevEco 的机器上首次真正编译，报 3 条错误（`Browser.ets:405:39`、`TitleBar.ets:396:57`、`TitleBar.ets:396:82`），另 `Browser.ets:306` 有同类字段声明。
-
-- **根因**：`WebDarkMode`、`FullScreenExitHandler` 声明在 Web 组件侧 `component/web.d.ts` 的全局作用域，`@ohos.web.webview` 命名空间**没有**导出它们。第四轮凭 `webview.WebDarkMode` 写法实现（当时无编译器），旧版踩坑 18 还把结论写反了，于是错误潜伏到真机编译。
-- **证据（官方 API 12 文档示例，本地副本）**：`web-attr.md:1605-1622` 的 darkMode 示例虽然 `import { webview } from '@kit.ArkWeb'`，用的是裸 `WebDarkMode.On`；`web-attr.md:5291-5313`、`5331-5356` 的 onFullScreenEnter/Exit 示例同样裸写 `FullScreenExitHandler`。反向核对：`webview.md` 全文不含这两个符号，而 `WebDownloadDelegate`/`WebCookieManager`/`WebStorage` 都以 `webview.X` 出现，说明两类符号归属不同。
-- **修复**：`Browser.ets:308`、`407` 去前缀 → `FullScreenExitHandler`；`TitleBar.ets:396` → `WebDarkMode.On / WebDarkMode.Auto`；`TitleBar.ets` 删除因此不再使用的 `import webview from '@ohos.web.webview'`；两处补中文注释说明归属，避免再次被改回去。
-- **防回归**：`tests/check-structure.mjs:418-432` 新增 4.3 规则，命中源码中 `webview.WebDarkMode` / `webview.FullScreenExitHandler` 即失败；配套 `maskComments`（`:43-97`）把注释替换为等长空格再匹配，避免注释里的反面示例被误报（同一坑即踩坑 13）。用临时探针文件验证过规则确实报错，删除后恢复全绿。
-- **验证**：`node --test` 20 pass；三项静态检查全绿（23 文件 38 导入 / 7 ForEach / 8 TAG / 6 个 @ObjectLink 组件 8 处调用 / 4 HTML）。
-
-## 六、未闭环（环境限制，非代码问题）
-
-- 本机无 DevEco Studio / OpenHarmony SDK / hvigorw，**未做编译与真机运行验证**。换有 DevEco 5.0+ 的环境执行 `hvigorw assembleHap` 复核 ArkTS 严格模式告警。
-- 真机手测清单：手机竖屏/横屏各走一遍新增页签→切换→关闭→旋转；平板上限 10 页签；深色模式下首页与网页配色；无历史时按返回键应退出应用。
-- 第四轮待真机确认项：更多菜单 8 个入口逐项生效（尤其切换缓存/深色后当前页自动刷新）、页面内下载能落盘到 `files/Download/`、视频网站全屏进出、页签图标刷新、断网时的错误提示文案。
-- 第五轮待真机确认项：查找条对中文关键字的匹配计数、跨页面跳转后计数是否归零、书签面板在小屏（<600vp）与横屏下的高度与滚动、重启应用后书签是否仍在（`flush()` 是否真正落盘）、同一网址重复收藏是否只剩一条。
-- 第六轮待真机确认项：`window.open` 弹出的新页签能否在 10 页签上限时正确拒绝、`onWindowExit`（网页 `window.close()`）后页签是否关闭、历史面板在手机横屏/小屏下的高度与滚动、重启应用后历史是否仍在、`clearBrowsingData` 是否同时清空历史。
-- 第八轮待真机确认项：重新整包编译确认 3 条错误消失；全屏进出与 `forceDark` 深色适配仍正常。
-
-## 七、踩过的坑（绝对不要再踩）
+## 八、踩过的坑（绝对不要再踩）
 
 1. **PowerShell 执行策略拦 npm 脚本**：`npm test` 可能报 UnauthorizedAccess。用 `node --test` / `node tests/xxx.mjs` 直跑。
-2. **`node --test tests/` 在 Windows 上把目录当模块加载报 MODULE_NOT_FOUND**：用 `node --test`（无参）或指定文件。
-3. **Node 单测直接 import 应用源码可行**（Node ≥22.6 默认剥离 TS 类型），不要复制逻辑到测试。**根目录不要再放 package.json**——与 oh-package.json5 冲突会导致无法编译打包；`.mjs` 天然 ESM，语法探测会把 `import/export` 的 .ts 当 ESM 处理。
+2. **`node --test tests/` 在 Windows/Node 25 上把目录当模块加载报 MODULE_NOT_FOUND**：用 `node --test`（无参）或指定文件。
+3. **Node 单测直接 import 应用源码可行**（Node ≥22.6 默认剥离 TS 类型），不要复制逻辑到测试。**根目录不要再放 package.json**——与 `oh-package.json5` 冲突会导致无法编译打包；`.mjs` 天然 ESM。
 4. **ArkTS 跨文件引用的类/枚举必须 export**（`@Observed export class WebKey`）。
 5. **ForEach 必须写第三个 keyGenerator 参数**。
-6. **长文件一次性 write 后必须 read 回来核对**（历史上 TitleBar.ets 被写坏过一次：内容截断 + 杂散字符）。
+6. **长文件一次性 write 后必须 read 回来核对**（历史上 `TitleBar.ets` 被写坏过一次：内容截断 + 杂散字符）。
 7. **5.x 字段改名**：`srcEntrance`→`srcEntry`（module 与 ability 两级、含 ohosTest）、`visible`→`exported`、删 `uiSyntax`；hvigor-config 用 `modelVersion 5.0.0` + `@ohos/hvigor-ohos-plugin 3.0.9`，不要再写 `hvigorVersion`。
-8. **HTML 自闭合 `<div/>` 不合法**；CSS 里全角冒号 `margin：0px` 整条样式失效且肉眼难发现——`check-structure.mjs` 已覆盖这两类。
+8. **HTML 自闭合 `<div/>` 不合法**；CSS 里全角冒号 `margin：0px` 整条样式失效且肉眼难发现——`check-structure.mjs` 已覆盖。
 9. **协议判定别用宽正则**：`c++: std::vector` 会被误判成 URL；已改白名单 `/^(https?|ftp|file|data):/i`，回归用例在 `tests/formatUrl.test.mjs`。
 10. **`webview.once('webInited')` 与自定义 userAgent 在 API 12 失效**，不要恢复。
 11. **横竖屏不要销毁重建 Web**：WebTab 必须在 if 分支外常驻并 `.layoutWeight(1)`。
 12. **页签标题不要再放回普通数组**：必须挂在 `@Observed` 对象的属性上，否则改了不刷新。
 13. **静态检查器自身也会错**：CSS 全角标点检查最初把中文注释里的“：”判成错误 → 现在先剔除 `/* */` 注释。出现“只有一处莫名报错”时先怀疑检查器。
 14. **图标素材清单别靠记忆**：本工程只有 `ic_public_add/advance/back/cancel_filled/home/more_filled/navigation/refresh`、`icon.png`、`submit.png`，没有 aa/bb/add/delete/fresh/home。改图标前先跑 `node tests/check-resources.mjs`。
-15. **pad.html 的 `adapterDevice` 现在是空实现**（原来靠改 viewport 写死 `width=720`，与 device-width 自适应冲突）。函数名不能删——ArkTS `onPageEnd` 会 `runJavaScript('adapterDevice()')` 调用它（`TitleBar.ets`）。
+15. **pad.html 的 `adapterDevice` 现在是空实现**（原来靠改 viewport 写死 `width=720`，与 device-width 自适应冲突）。函数名不能删——`onPageEnd` 会 `runJavaScript('adapterDevice()')` 调用它。
 16. git 提交后 LF→CRLF warning 是 Windows 正常现象，无需处理。
-17. `Browser.ets` 里 `import { formatUrl } from './UrlFormatter'; export { formatUrl };` 这两行是给外部与单测用的转出，**别删**。
-18. **`WebDarkMode` / `FullScreenExitHandler` 必须裸写，不能加 `webview.` 前缀**：二者声明在 `component/web.d.ts`（Web 组件全局作用域），`@ohos.web.webview` 没有导出它们；写成 `webview.WebDarkMode` / `webview.FullScreenExitHandler` 会报 `Property ... does not exist on type 'typeof webview'` 与 `Namespace 'webview' has no exported member ...`（第八轮踩过，旧条目结论写反了）。`WebviewController`/`WebDownloadDelegate`/`WebCookieManager`/`WebStorage` 等才在 `webview` 命名空间里。另一半照旧：`loadUrl`/`accessBackward`/`accessForward` 在 Web 未挂载时抛 17100001，必须 try/catch，否则点击新增页签即崩溃。
-19. **用了 `TAG` 必须自己声明**：`Logger.info(TAG, ...)` 里的 `TAG` 若本文件没有 `const TAG`，编译期不报错、运行到该行才炸（`PhoneLayout.ets` 就踩了）。`check-structure.mjs` 已加规则。
+17. **`Browser.ets` 里 `import { formatUrl } from './UrlFormatter'; export { formatUrl };` 是转出，别删**（外部与单测依赖）。
+18. **`WebDarkMode` / `FullScreenExitHandler` 必须裸写**：二者在 `component/web.d.ts`（Web 组件全局作用域），`@ohos.web.webview` 没有导出；写成 `webview.WebDarkMode` / `webview.FullScreenExitHandler` 会报 `Property ... does not exist on type 'typeof webview'` 与 `Namespace 'webview' has no exported member ...`（第八轮实打实被用户编译报出来过）。
+19. **用了 `TAG` 必须自己声明**：`Logger.info(TAG, ...)` 里的 `TAG` 若本文件没有 `const TAG`，编译期不报错、运行到该行才炸（`PhoneLayout.ets` 踩过）。检查器已加规则。
 20. **@ObjectLink 必须由父组件传参**：`MoreMenuButton`/`WebTab` 都需要 `settings`，漏传会在运行时抛「ObjectLink must be initialized」。检查器已校验所有调用点。
-21. **不要给 `Browser` 直接加会驱动 UI 的开关**：`Browser` 不是 @Observed，加了也不会刷新。要联动的状态放 `WebSettings`（@Observed），用 @ObjectLink 绑。
-22. **下载不调用 `item.start()` 就永远 PENDING**：`WebDownloadDelegate` 只在 `onBeforeDownload` 里主动指定保存路径才会真正开始；委托对象必须由 Browser 持有引用，否则会被回收导致回调丢失。
-23. **`zoom(factor)` 是相对倍数不是绝对值**：直接传 1.5 会在当前比例上再乘 1.5，必须换算成 `目标 / 当前`。
-24. **别信网上 14+ 的 API 名字**：`findAllAsync`/`findNext`/`flushSync` 在 API 12 都不存在，对应的是 `searchAllAsync`/`searchNext`/`flush`。改任何 controller/首选项调用前，先在 `.git/dsh-docs/` 里 grep 签名。
+21. **不要给 `Browser` 直接加会驱动 UI 的开关**：`Browser` 不是 @Observed，加了不会刷新。联动态放 `WebSettings`（@Observed），用 @ObjectLink 绑。
+22. **下载不调用 `item.start()` 就永远 PENDING**：只在 `onBeforeDownload` 里主动指定保存路径才会真正开始；委托对象必须由 `Browser` 持有引用。
+23. **`zoom(factor)` 是相对倍数不是绝对值**：直接传 1.5 会在当前比例上再乘 1.5，必须换算成 `目标 / 当前`，并夹在 0.5–4。
+24. **别信网上 14+ 的 API 名字**：`findAllAsync`/`findNext`/`flushSync` 在 API 12 都不存在，对应 `searchAllAsync`/`searchNext`/`flush`。改任何 controller/首选项调用前，先在 `.git/dsh-docs/` 里 grep 签名。
 25. **`activeMatchOrdinal` 从 0 开始**：直接显示会得到「0/5」，必须 +1。
-26. **书签面板别插在 Web 上面覆盖**：用兄弟节点（固定高度、内部 List 滚动）而不是 overlay，避免盖住网页且不触发重载。
-27. **`constraintSize({ maxHeight })` 比写死 height 好**：书签少时不留大片空白，多时到上限才滚。
-28. **本机 `github.com:443` 被阻断时改用 SSH 443 推送**：`Test-NetConnection github.com -Port 443` 为 False，但 `ssh.github.com:443`、`codeload.github.com:443` 可达（本机已有 `~/.ssh/id_ed25519`，认证身份 DuXingLang）。一次性推送命令：`git push ssh://git@ssh.github.com:443/DuXingLang/OHBrowser.git master`，不要为此改 `origin`。注意 PowerShell 把 git 的 stderr 当错误，输出 `master -> master` 却报 exit 1 属正常。
-29. **提交信息文件每次用新文件名**：`write` 到 `D:\project\Browser\.git\dsh-msg-*.txt` 且旧名已被删除时，会报 “file no longer exists — re-read the file, then retry”。改成带轮次后缀（如 `.git\dsh-msg-window-history.txt`），提交后 `Remove-Item` 删除；`git add` **不要用 `-A`**（会把消息文件纳入暂存），改显式列路径。
+26. **书签/历史面板别插在 Web 上面覆盖**：用兄弟节点（固定高度、内部 List 滚动）而不是 overlay，避免盖住网页且不触发重载。
+27. **`constraintSize({ maxHeight })` 比写死 height 好**：内容少时不留大片空白，多时到上限才滚。
+28. **本机 `github.com:443` 被阻断时改用 SSH 443 推送**：`Test-NetConnection github.com -Port 443` 为 False，但 `ssh.github.com:443` 可达（本机已有 `~/.ssh/id_ed25519`，认证身份 DuXingLang）。一次性命令：`git push ssh://git@ssh.github.com:443/DuXingLang/OHBrowser.git master`，不要为此改 `origin`。
+29. **提交信息文件每次用新文件名**：`write` 到 `.git\dsh-msg-<轮次>.txt`（旧名被删后会报 “file no longer exists”）；`git commit -F` 后 `Remove-Item`；`git add` **不要用 `-A`**（会把消息文件纳入暂存），改显式列路径；不要提交 `.git/dsh-docs/` 与临时脚本。
 30. **PowerShell 直跑 Node 的 `node --test tests/` 会 MODULE_NOT_FOUND**（把目录当模块），要用 `node --test`（无参）或指定文件；`node --import` 不参与（无 loader hook）。
+31. **文档签名与正文可能不一致**：`ControllerHandler.setWebController(controller: WebviewController)` 的签名行没写 `| null`，但正文/示例明确允许传 `null`，实际 d.ts 接受 `null`（用户构建未报错即证明）。以「构建结果 + 正文」为准，不要只看签名行。
 
-## 八、关键文件地图
+## 九、关键文件地图
 
 ```
 entry/src/main/ets/
-├── model/Browser.ets          # 页签/控制器/标题/canBack·canForward/formatUrl 转出
+├── model/Browser.ets          # 页签/控制器/标题/canBack·canForward/缩放/UA/清数据/下载/全屏/查找/书签历史入口/formatUrl 转出
 ├── model/UrlFormatter.ts      # 纯函数：地址栏输入归一化（有单测）
 ├── model/Logger.ts            # hilog 封装（已修变参）
 ├── model/BookmarkList.ts      # 纯函数：书签序列化/解析/标题兜底（有单测）
 ├── model/BookmarkStore.ets    # @Observed 书签状态 + preferences 持久化
 ├── model/HistoryList.ts       # 纯函数：历史去重/上限/时间格式化（有单测）
 ├── model/HistoryStore.ets     # @Observed 历史状态 + preferences 持久化
-├── common/TitleBar.ets        # 平板：TabletTitle / TabItem / BrowserTabs / WebTab（含下载、favicon、全屏、查找回调）
+├── common/TitleBar.ets        # 平板：TabletTitle / TabItem / BrowserTabs / WebTab（下载、favicon、全屏、查找、窗口回调）
 ├── common/PhoneLayout.ets     # 手机：PhoneHeader / PhoneToolBar（含更多菜单入口）
 ├── common/MoreMenu.ets        # 「更多」菜单：缩放/桌面版 UA/深色/缓存/清除数据/查找/书签/历史
-├── common/FindBar.ets         # 页面内查找条（输入/上一个/下一个/计数/关闭）
-├── common/BookmarkPanel.ets   # 书签面板（收藏当前页/跳转/删除）
-├── common/HistoryPanel.ets    # 历史面板（跳转/删除/清空，含访问时间）
+├── common/FindBar.ets         # 页面内查找条
+├── common/BookmarkPanel.ets   # 书签面板
+├── common/HistoryPanel.ets    # 历史面板
 ├── pages/Index.ets            # 入口：宽度断点/形态判定/布局分支/全屏隐藏/onBackPress
 └── Application/AbilityStage.ts、MainAbility/MainAbility.ts   # 未改动
 entry/src/main/resources/
 ├── base/dark/en_US/element/*  # 三套资源（颜色/字符串）
 ├── rawfile/phone.html pad.html # 本地首页（自绘深浅色 + 自适应栅格）
-└── rawfile/test.html          # 演示页（已修语法）
+└── rawfile/test.html          # 演示页
 tests/
-├── formatUrl.test.mjs         # 7 用例（node --test）
+├── formatUrl.test.mjs         # 7 用例
 ├── bookmark.test.mjs          # 7 用例：书签序列化/解析
 ├── history.test.mjs           # 6 用例：历史去重/上限/删除/时间格式化
 ├── check-json5.mjs            # json5 解析
 ├── check-resources.mjs        # 资源引用一致性
-└── check-structure.mjs        # 导入符号 / ForEach / TAG 声明 / @ObjectLink 传参 / 全局符号归属 / HTML 结构
+└── check-structure.mjs        # 导入符号/ForEach/TAG/@ObjectLink/全局符号归属(4.3)/HTML 结构
 .claude/
-├── context-summary-browser-round2.md
-├── verification-report-browser-round2.md   # 自评 92 分
-├── verification-report-webview-api.md      # 第四轮（官方 API 补功能，自评 93 分）
-├── context-summary-webview-api.md          # 第四轮上下文摘要
-├── context-summary-find-bookmark.md        # 第五轮（查找 + 书签）
-├── verification-report-find-bookmark.md    # 第五轮，自评 94 分
-├── context-summary-window-history.md       # 第六轮（window.open + 历史）
-├── verification-report-window-history.md   # 第六轮，自评 94 分
-├── context-summary-webview-symbols-fix.md  # 第八轮（WebDarkMode/FullScreenExitHandler）
-├── verification-report-webview-symbols-fix.md  # 第八轮，自评 95 分
-├── context-summary-browser-optimization.md # 第一轮
-├── verification-report-browser-optimization.md
-└── operations-log.md          # 各轮流水
+├── context-summary-*.md / verification-report-*.md   # 各轮三件套（第八轮：…-webview-symbols-fix.md，自评 95）
+└── operations-log.md          # 各轮流水（接手前通读）
+.git/dsh-docs/                 # 官方 API 12 文档本地副本（web-attr.md / webview.md / preferences.md），只读参考
 ```
 
-## 九、环境备忘
+## 十、环境备忘
 
-- 工作目录 `D:\project\Browser`；分支 master；Node v25.2.1（支持 TS 直跑）。
-- 无 DevEco Studio / OpenHarmony SDK / hvigorw：ArkTS 层改动只能靠静态检查 + 人工审查。
-- CLAUDE.md 要求：中文交付、修改前先读文件、`.claude/` 三件套、自评 ≥90 通过。
-- **推送**：`git push ssh://git@ssh.github.com:443/DuXingLang/OHBrowser.git master`（`github.com:443` 在本机被阻断；`origin` 仍为 https 地址，勿改）。提交信息用 `write` 到 `.git/dsh-msg-<轮次>.txt` 再 `git commit -F`，提交后删除该文件。
+- 工作目录 `D:\project\Browser`；分支 `master`；Node v25.2.1（支持 TS 直跑）；git 用户已配置（历史提交可查）。
+- **无 DevEco Studio / OpenHarmony SDK / hvigorw**：ArkTS 层改动只能靠静态检查 + 人工审查 + 用户侧编译。
+- CLAUDE.md 要求：中文交付、改前先读文件、`.claude/` 三件套、自评 ≥90 通过；只做用户要求的事，不做“顺手重构”。
+- **推送**：`git push ssh://git@ssh.github.com:443/DuXingLang/OHBrowser.git master`（`github.com:443` 在本机被阻断；`origin` 仍为 https，勿改）。
+- 当前 HEAD `6055add` 未推送；工作区干净；本轮（第九轮）只改文档，无代码改动。

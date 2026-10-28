@@ -15,7 +15,7 @@
 
 {
   "app": {
-    "bundleName": "ohos.samples.browser1",
+    "bundleName": "ohos.sxd.browser",
     "vendor": "samples",
     "versionCode": 1000001,
     "versionName": "1.1.0",

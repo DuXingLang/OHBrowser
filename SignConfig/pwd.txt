@@ -1,0 +1,3 @@
+Store password: app223456
+Key alias: OH-App-subCA
+Key password: app423456

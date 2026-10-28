@@ -538,7 +538,7 @@ export struct WebTab {
   onFullScreenChange: (fullScreen: boolean) => void = () => {
   };
   // 注入给 HTML 的桥接对象，方法名需与 registerJavaScriptProxy 的第三个参数一致
-  testObj = {
+  testObj: ESObject = {
     test: (addr: string) => {
       // HTML 端传入裸域名，统一走 formatUrl 做协议补全与搜索词归一化
       this.browser.loadUrl(addr);

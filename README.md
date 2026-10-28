@@ -7,8 +7,7 @@
 
 |首页|打开网址|
 |----|------|
-|![](screenshots/device/home.png)|![](screenshots/device/jump.png)|
-
+|![](screenshots/device/home.png)|
 使用说明:
 1. 连接Wifi，启动应用，展示默认页面内容;
 2. 点击默认页面的图标跳转到对应网页，或者在输入框输入网址（自动补全协议，输入普通文本则作为搜索词跳转搜索）;

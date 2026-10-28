@@ -15,12 +15,26 @@
 
 {
   "app": {
-    "signingConfigs": [],
+    "signingConfigs": [
+      {
+        "name": "default",
+        "material": {
+          "storePassword": "000000194E13890C474D70146473FB4755DEA7C824D18C07B4227F97D459A99B923B96047A8CCE8B94",
+          "certpath": "D:/SXD/01_project/12_Test/oh_browser/OHBrowser/SignConfig/OH-App-app-cert.cer",
+          "keyAlias": "OH-App-subCA",
+          "keyPassword": "00000019DD3BAB8F20F0C97C21F9AB910836B188F310E9A4896AC65AE44E5E6D2E8C3E9DC2DE82F03F",
+          "profile": "D:/SXD/01_project/12_Test/oh_browser/OHBrowser/SignConfig/ohos.sxd.browser.p7b",
+          "signAlg": "SHA256withECDSA",
+          "storeFile": "D:/SXD/01_project/12_Test/oh_browser/OHBrowser/SignConfig/OH-App.p12"
+        }
+      }
+    ],
     "products": [
       {
         "name": "default",
         "signingConfig": "default",
-        "compatibleSdkVersion": "5.0.0(12)",
+        "compatibleSdkVersion": 12,
+        "compileSdkVersion": 12,
         "runtimeOS": "OpenHarmony"
       }
     ]

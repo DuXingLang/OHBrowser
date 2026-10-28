@@ -14,6 +14,8 @@
  */
 import deviceInfo from '@ohos.deviceInfo';
 import mediaquery from '@ohos.mediaquery';
+import common from '@ohos.app.ability.common';
+import { BusinessError } from '@kit.BasicServicesKit';
 import { Browser } from '../model/Browser';
 import Logger from '../model/Logger';
 import { PhoneHeader, PhoneToolBar } from '../common/PhoneLayout';
@@ -65,6 +67,20 @@ struct Index {
     }
   }
 
+  // 页签条最右侧的关闭按钮：退出当前浏览器应用。
+  // 本工程只有一个 UIAbility，terminateSelf() 即关闭整个应用。
+  private exitApp(): void {
+    Logger.info(TAG, `exitApp`);
+    try {
+      const context = getContext(this) as common.UIAbilityContext;
+      context.terminateSelf().catch((error: BusinessError) => {
+        Logger.error(TAG, `terminateSelf failed: ${JSON.stringify(error)}`);
+      });
+    } catch (e) {
+      Logger.error(TAG, `exitApp failed: ${JSON.stringify(e)}`);
+    }
+  }
+
   aboutToAppear() {
     let deviceType: string = 'default';
     try {
@@ -108,7 +124,12 @@ struct Index {
         if (this.isPhone) {
           PhoneHeader({ browser: $browser })
         } else {
-          TabletTitle({ browser: $browser })
+          TabletTitle({
+            browser: $browser,
+            onExitApp: () => {
+              this.exitApp();
+            }
+          })
           Progress({ value: this.browser.progress, total: 100 })
             .color($r('app.color.progress_blue'))
             .visibility(this.browser.hideProgress ? Visibility.Hidden : Visibility.Visible)
@@ -142,7 +163,12 @@ struct Index {
       if (!this.webFullScreen && this.isPhone) {
         // 手机布局没有页签条，存在多个页签时补一条页签栏，否则用户无法切回之前的页签
         if (this.browser.webArray.length > 1) {
-          BrowserTabs({ browser: $browser })
+          BrowserTabs({
+            browser: $browser,
+            onExitApp: () => {
+              this.exitApp();
+            }
+          })
         }
         PhoneToolBar({ browser: $browser })
       }

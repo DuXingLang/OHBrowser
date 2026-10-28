@@ -1,7 +1,7 @@
 # HANDOFF — OpenHarmony Browser 示例优化（会话交接）
 
 > 写给零上下文的新会话：先读「一、任务」「二、现状必读」「三、卡在哪」「四、下一步计划」「八、踩坑」，其余按需查阅。
-> 更新时间：2026-10-28 · 工作目录 `D:\project\Browser` · 分支 `master` · 当前 HEAD `6055add`（第八轮修复已提交，**未推送**）
+> 更新时间：2026-10-28 · 工作目录 `D:\project\Browser` · 分支 `master` · 当前 HEAD 见 `git log -1`（第十轮已提交，**未推送**）
 
 ---
 
@@ -20,11 +20,11 @@
 
 ### 提交链
 
-`2056c72`（原版）→ `164919b`（一轮）→ `90d35e7`（二轮）→ `5e6ccb5`（三轮）→ `45cff8e`（四轮）→ `edd5171`（五轮）→ `5c51869`（六轮）→ `c866326`（七轮，文档）→ **`6055add`（八轮，编译错误修复，7 文件 +204/−10，未推送）**
+`2056c72`（原版）→ `164919b`（一轮）→ `90d35e7`（二轮）→ `5e6ccb5`（三轮）→ `45cff8e`（四轮）→ `edd5171`（五轮）→ `5c51869`（六轮）→ `c866326`（七轮，文档）→ `6055add`（八轮，编译错误修复，7 文件 +204/−10）→ `ba24ee0`（九轮，文档）→ **十轮（页签条 Chrome 风格，7 文件 +263/−46，未推送；哈希见 `git log -1`）**
 
 ### 一句话现状
 
-四项需求对应的能力都已实现（5.x 迁移、界面重做、响应式、页签/查找/书签/历史/下载/全屏等）；用户在有 DevEco 的机器上编译报出的 3 条 `webview.WebDarkMode` / `webview.FullScreenExitHandler` 错误已在第八轮修复并提交；本会话（第九轮）做了全量「源码 × 官方文档」审计，结论是**没有其他同类或新增编译错误**，只补了文档。**工作区干净。**
+四项需求对应的能力都已实现（5.x 迁移、界面重做、响应式、页签/查找/书签/历史/下载/全屏等）；用户在有 DevEco 的机器上编译报出的 3 条 `webview.WebDarkMode` / `webview.FullScreenExitHandler` 错误已在第八轮修复并提交；第九轮做了全量「源码 × 官方文档」审计，结论是**没有其他同类或新增编译错误**，只补了文档；第十轮按用户要求把页签条重做成 Chrome 风格（页签靠左、`+` 紧跟最后一个页签并垂直居中、最右侧固定「关闭应用」按钮），改动待用户整包重编译复核。
 
 ### 已完成能力（按轮次）
 
@@ -36,7 +36,8 @@
 - 六轮（`5c51869`）：`window.open` 新页签（`onWindowNew`/`onWindowExit` + `allowWindowOpenMethod`）与历史记录（纯函数 + preferences + 面板），补 6 个历史单测。
 - 七轮（`c866326`）：仅更新交接文档。
 - 八轮（`6055add`）：修 3 条编译错误（命名空间误写）；`check-structure.mjs` 新增 4.3 规则防回归；文档同步。
-- 九轮（本会话，收尾）：全量审计（未发现其他编译错误）+ 重写本交接文档；无代码改动。
+- 九轮（`ba24ee0`）：全量 API 审计（未发现其他编译错误）+ 重写交接文档 + README 同步；无代码改动。
+- 十轮（本会话末提交）：页签条 Chrome 风格重做——页签靠左、`+` 跟随最后一个页签并垂直居中、最右侧固定「关闭应用」按钮（`terminateSelf`），手机 `BrowserTabs` 与平板 `TabletTitle` 同结构；无 Web 能力改动。
 
 ### 源码规模
 
@@ -53,7 +54,7 @@
 
 ## 四、下一步计划（按优先级）
 
-1. **【最高】等用户整包重编译**：确认第八轮修的 3 条错误消失、且没有新 ERROR。有新报错时：报错行号 → 在 `.git/dsh-docs/` 里 grep 对应签名 → 最小改动。
+1. **【最高】等用户整包重编译**：确认第八轮修的 3 条错误消失、且没有新 ERROR，并按第六节手测第十轮页签条。有新报错时：报错行号 → 在 `.git/dsh-docs/` 里 grep 对应签名 → 最小改动。
 2. **【高】推送当前提交**（本机 `github.com:443` 被阻断）：
    `git push ssh://git@ssh.github.com:443/DuXingLang/OHBrowser.git master`
    （`origin` 保持 https 不动；PowerShell 会把 git 的 stderr 当错误，输出 `master -> master` 后 exit 1 属正常。）
@@ -71,6 +72,7 @@
 - **UI 状态对象**：`Browser` 不是 @Observed，直接加会驱动 UI 的字段不会刷新；联动态放 `WebSettings`（@Observed，@ObjectLink 绑定）或 `@Observed WebKey.favicon/title`；`BookmarkStore`/`HistoryStore` 同理。
 - **Web 未挂载时**：`accessBackward`/`accessForward`/`loadUrl` 等会抛 17100001（`The WebviewController must be associated with a Web component`），必须 try/catch（三轮已因此崩过）。
 - **页签**：上限 `MAX_TAB_COUNT=10`；`WebTab` 必须常驻组件树（if 分支外 + `.layoutWeight(1)`），旋转不重载；`window.open` 承接页签 `src` 必须留空（`item.blank ? '' : 首页`），否则会顶掉内核跳转。
+- **页签条（第十轮）**：页签固定宽 `TAB_WIDTH=200` 靠左依次排列；`+` 按钮必须放在滚动区（`Scroll > Row`）内、`ForEach` 之后，才会跟随最后一个页签；「关闭应用」按钮必须放在 `Scroll` 外，否则会随页签一起滚走；条内垂直居中靠 `alignItems(Bottom)` + `margin({ bottom: (TAB_STRIP_HEIGHT - NEW_TAB_SIZE) / 2 })`（=6），不要引入绝对定位；关闭应用 = `UIAbilityContext.terminateSelf()`（单 Ability 即整个应用），`BrowserTabs` 与 `TabletTitle` 都通过 `onExitApp` 回调由 Index 注入。
 - **窗口**：`onWindowNew` 里必须调 `handler.setWebController(...)`（拒绝开窗传 `null`，文档正文明确允许），否则渲染进程阻塞；`allowWindowOpenMethod(true)` 不开则 `window.open` 被静默拦截；`onWindowExit`（网页 `window.close()`）用 `timestamp` 反查页签下标（关闭后 key 会重编号）。
 - **查找**：`activeMatchOrdinal` 从 0 开始，展示要 +1；无匹配显示 `0/0` 并置灰上/下一个；`onPageBegin` 时 `resetFindResult()` 只清计数、不收起查找条。
 - **下载**：`onBeforeDownload` 里必须 `item.start(dir + item.getSuggestedFileName())` 才会真正开始（否则永远 PENDING）；落盘目录 `getContext(this).filesDir + '/Download/'`（沙箱内，免权限）；委托对象必须由 `Browser` 持有引用，否则被回收。
@@ -82,6 +84,7 @@
 ## 六、待真机确认清单
 
 - 第八轮：重新**整包编译**确认 3 条错误消失；全屏进出与 `forceDark` 深色适配仍正常。
+- 第十轮：页签条在 1～10 个页签下：页签靠左、超过一屏可横向滚动到底看到 `+` 按钮并点击新建、`+` 与 `×` 在条内垂直居中；最右「关闭应用」点击后应用退出（无黑屏/残留）；手机与平板两种布局、深浅色下样式一致。
 - 通用流程：手机竖屏/横屏各走一遍新增页签→切换→关闭→旋转；平板上限 10 页签；深色下首页与网页配色；无历史时按返回键应退出应用。
 - 第四轮能力：更多菜单 8 个入口逐项生效（切换缓存/深色后当前页自动刷新）、下载能落盘到 `files/Download/`、视频全屏进出、页签图标刷新、断网错误提示文案。
 - 查找/书签：中文关键字匹配计数、跨页后计数归零、面板在小屏与横屏下的高度与滚动、重启后书签仍在（`flush()` 是否真正落盘）、同址重复收藏只剩一条。
@@ -101,7 +104,7 @@ node tests/check-structure.mjs  # 导入符号 / ForEach / TAG / @ObjectLink 传
 ```
 node --test                    → 20 pass / 0 fail
 node tests/check-json5.mjs     → 8 个 json5 配置全部解析通过
-node tests/check-resources.mjs → 23 个源文件 83 处源码资源引用、4 个配置文件 16 处配置引用全部命中
+node tests/check-resources.mjs → 23 个源文件 89 处源码资源引用、4 个配置文件 16 处配置引用全部命中
 node tests/check-structure.mjs → 23 个源文件 38 处相对导入、7 处 ForEach、8 处 TAG 声明、6 个 @ObjectLink 组件 8 处调用、4 个 HTML 全部符合约束
 ```
 
@@ -138,6 +141,7 @@ node tests/check-structure.mjs → 23 个源文件 38 处相对导入、7 处 Fo
 29. **提交信息文件每次用新文件名**：`write` 到 `.git\dsh-msg-<轮次>.txt`（旧名被删后会报 “file no longer exists”）；`git commit -F` 后 `Remove-Item`；`git add` **不要用 `-A`**（会把消息文件纳入暂存），改显式列路径；不要提交 `.git/dsh-docs/` 与临时脚本。
 30. **PowerShell 直跑 Node 的 `node --test tests/` 会 MODULE_NOT_FOUND**（把目录当模块），要用 `node --test`（无参）或指定文件；`node --import` 不参与（无 loader hook）。
 31. **文档签名与正文可能不一致**：`ControllerHandler.setWebController(controller: WebviewController)` 的签名行没写 `| null`，但正文/示例明确允许传 `null`，实际 d.ts 接受 `null`（用户构建未报错即证明）。以「构建结果 + 正文」为准，不要只看签名行。
+32. **页签条的 `+`/`×` 位置**：`+` 放在 `Scroll > Row` 之外会固定在最右、离开最后一个页签（Chrome 行为是跟随最后页签，必须放滚动区内 `ForEach` 之后）；`×` 放滚动区内会随页签滚走（必须放 `Scroll` 外）；两者在 `Row alignItems(Bottom)` 下靠 `margin.bottom` 居中，改 `TAB_STRIP_HEIGHT` 时公式自动跟随。
 
 ## 九、关键文件地图
 
@@ -170,7 +174,7 @@ tests/
 ├── check-resources.mjs        # 资源引用一致性
 └── check-structure.mjs        # 导入符号/ForEach/TAG/@ObjectLink/全局符号归属(4.3)/HTML 结构
 .claude/
-├── context-summary-*.md / verification-report-*.md   # 各轮三件套（第八轮：…-webview-symbols-fix.md，自评 95）
+├── context-summary-*.md / verification-report-*.md   # 各轮三件套（第八轮：…-webview-symbols-fix.md，自评 95；第十轮：…-tab-strip-chrome.md）
 └── operations-log.md          # 各轮流水（接手前通读）
 .git/dsh-docs/                 # 官方 API 12 文档本地副本（web-attr.md / webview.md / preferences.md），只读参考
 ```
@@ -181,4 +185,4 @@ tests/
 - **无 DevEco Studio / OpenHarmony SDK / hvigorw**：ArkTS 层改动只能靠静态检查 + 人工审查 + 用户侧编译。
 - CLAUDE.md 要求：中文交付、改前先读文件、`.claude/` 三件套、自评 ≥90 通过；只做用户要求的事，不做“顺手重构”。
 - **推送**：`git push ssh://git@ssh.github.com:443/DuXingLang/OHBrowser.git master`（`github.com:443` 在本机被阻断；`origin` 仍为 https，勿改）。
-- 当前 HEAD `6055add` 未推送；工作区干净；本轮（第九轮）只改文档，无代码改动。
+- 当前 HEAD（第十轮提交）未推送；工作区干净；哈希以 `git log -1` 为准。

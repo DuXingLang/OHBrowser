@@ -12,7 +12,7 @@
 使用说明:
 1. 连接Wifi，启动应用，展示默认页面内容;
 2. 点击默认页面的图标跳转到对应网页，或者在输入框输入网址（自动补全协议，输入普通文本则作为搜索词跳转搜索）;
-3. 页签条可点击切换网页，点击页签上的关闭按钮关闭对应页签（至少保留一个页签）;
+3. 页签条参照 Chrome 风格：页签默认靠左排列、可横向滚动，「新建页签」按钮（+）紧跟最后一个页签并垂直居中，页签条最右侧固定「关闭应用」按钮（×）；点击页签切换网页，点击页签上的关闭按钮关闭对应页签（至少保留一个页签），点击最右侧「关闭应用」退出浏览器应用;
 4. 点击输入框左侧前进后退按钮进行页面的前进后退，点击主页图标回到主页，点击加号按钮新建页面（页签上限 10 个）;
 5. 布局按窗口宽度断点（600vp）切换：宽度小于断点时使用单页签 + 底部工具栏布局，否则使用多页签布局；手机横竖屏、平板分屏、2in1 自由窗口缩放时自动切换，且 Web 组件常驻、浏览状态不丢失;
 6. 手机布局存在多个页签时会在工具栏上方显示页签条，可切换页签；前进/后退/关闭按钮不可用时图标置灰;
@@ -69,6 +69,11 @@ tests/
 + 横竖屏适配：源码参考[Index.ets](entry/src/main/ets/pages/Index.ets)
   + 用 mediaquery 监听窗口宽度断点 `(width<600vp)` 决定布局，手机横竖屏、平板分屏与 2in1 自由窗口缩放都能正确切换；断点查询失败时退回设备形态判定;
   + 起始首页按设备形态选定后运行期不再变化，Web 组件常驻组件树，横竖屏切换时不销毁，浏览状态不丢失;
++ 页签条布局：源码参考[TitleBar.ets](entry/src/main/ets/common/TitleBar.ets)
+  + 页签固定宽度、靠左依次排列（`justifyContent(FlexAlign.Start)`），页签数超过一屏时横向滚动，激活页签白底、顶部圆角，与下方工具栏融为一体;
+  + 「新建页签」按钮放在滚动区内 `ForEach` 之后，紧跟随最后一个页签；页签条 `alignItems(VerticalAlign.Bottom)`，按钮用 `margin({ bottom: (TAB_STRIP_HEIGHT - NEW_TAB_SIZE) / 2 })` 在条内垂直居中;
+  + 页签条最右侧固定「关闭应用」按钮（`ic_public_cancel_filled`），放在滚动区外，不随页签滚动；点击后通过 `getContext(this) as common.UIAbilityContext` 调用 `terminateSelf()` 退出应用（本工程只有一个 UIAbility，即关闭整个应用）;
+  + 手机布局的页签条（`BrowserTabs`）与平板页签条（`TabletTitle`）使用同一套结构，退出回调 `onExitApp` 由 [Index.ets](entry/src/main/ets/pages/Index.ets) 注入;
 + 首页页面：[phone.html](entry/src/main/resources/rawfile/phone.html) 与 [pad.html](entry/src/main/resources/rawfile/pad.html)
   + 页面自绘深浅色变量（prefers-color-scheme），站点栅格按宽度自适应并在矮屏/横屏时压缩留白，站点区可滚动；默认快捷站点含百度（https://baidu.com）等入口，点击图标直接访问。
 + 扩展能力（基于 OpenHarmony 5.0.x ArkWeb API），源码参考[Browser.ets](entry/src/main/ets/model/Browser.ets)与[MoreMenu.ets](entry/src/main/ets/common/MoreMenu.ets)
@@ -119,7 +124,7 @@ tests/
 1. 本示例仅支持标准系统上运行;
 2. 本示例已适配API version 12版本SDK（OpenHarmony 5.0.0 Release），版本号：5.0.0.12;
 3. 本示例需要使用DevEco Studio 5.0.0及以上版本（配套hvigor 3.0.9）才可编译运行;
-4. 单元测试与静态检查依赖Node.js 22.6+：根目录执行 `node --test` 运行单测，依次执行 `node tests/check-json5.mjs`、`node tests/check-resources.mjs`、`node tests/check-structure.mjs` 运行静态检查（工程不提供 npm 脚本，避免根目录 package.json 与 oh-package.json5 冲突）。当前基线：单测 20 通过；8 个 json5 配置通过；23 个源文件 83 处源码资源引用、4 个配置文件 16 处配置引用命中；23 个源文件 38 处相对导入、7 处 ForEach、8 处 TAG 声明、6 个 @ObjectLink 组件 8 处调用、4 个 rawfile HTML 全部通过。
+4. 单元测试与静态检查依赖Node.js 22.6+：根目录执行 `node --test` 运行单测，依次执行 `node tests/check-json5.mjs`、`node tests/check-resources.mjs`、`node tests/check-structure.mjs` 运行静态检查（工程不提供 npm 脚本，避免根目录 package.json 与 oh-package.json5 冲突）。当前基线：单测 20 通过；8 个 json5 配置通过；23 个源文件 89 处源码资源引用、4 个配置文件 16 处配置引用命中；23 个源文件 38 处相对导入、7 处 ForEach、8 处 TAG 声明、6 个 @ObjectLink 组件 8 处调用、4 个 rawfile HTML 全部通过。
 
 ### 下载
 

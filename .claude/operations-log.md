@@ -95,3 +95,9 @@
 62. 交接文档：按「任务 / 现状必读 / 卡在哪 / 下一步计划 / 设计事实 / 待真机确认 / 验证 / 踩坑 / 文件地图 / 环境备忘」重写 HANDOFF.md（十节；头部标注当前 HEAD 6055add 未推送、新会话先读哪几节；补「文档来源」与 API 12 真实签名清单、符号归属；踩坑补第 31 条「文档签名与正文不一致时以构建为准」）。
 63. README.md 同步：使用说明补第 14 条（window.open 承接 / window.close 关闭页签）；工程目录补 rawfile 三个 HTML；具体实现补「编译兼容性」（Web 全局符号裸写）与「新窗口与窗口关闭」；新增「开发文档」小节指向 HANDOFF 与 `.claude/`；约束与限制补静态检查基线数字；检查器条目补 4.3 全局符号归属规则。
 64. 验证：文档改动不影响代码，`node --test` 20 pass / 0 fail；三项静态检查与基线一致（23 文件 38 导入 / 7 ForEach / 8 TAG / 6 个 @ObjectLink 组件 8 处调用 / 4 HTML；8 个 json5；83 处源码资源引用与 16 处配置引用）。文档提交见本轮 commit（未推送，`github.com:443` 被阻断）。
+
+### 第十轮：页签条 Chrome 风格重做 + 关闭应用按钮
+65. 需求（用户 m00392）：页签默认居左对齐；新增页签按钮在页签栏垂直居中、参照 Chrome 跟在最右侧页面后面；页签栏最右侧新增关闭按钮（关闭图标），点击关闭当前浏览器应用；按 Chrome 风格重新做 UI。
+66. 改动：`TitleBar.ets` 新增常量 `NEW_TAB_SIZE=28`、`TAB_STRIP_BUTTON_BOTTOM=(TAB_STRIP_HEIGHT-NEW_TAB_SIZE)/2`；`TabletTitle` 的 `+` 从 `Scroll` 外移入 `Scroll > Row` 的 `ForEach` 之后、`Row.justifyContent(FlexAlign.Start)`，`Scroll` 外新增固定「关闭应用」按钮（`ic_public_cancel_filled`，id `exitButton`，onClick → `onExitApp()`）；`BrowserTabs` 同步为「页签 + 新建（滚动区内）+ 最右关闭应用」，新增 `onExitApp: () => void` 属性；`Index.ets` 新增 `exitApp()`（`getContext(this) as common.UIAbilityContext` → `terminateSelf()`，try/catch + `BusinessError`），并向 `TabletTitle` / `BrowserTabs` 注入 `onExitApp`。
+67. 决策：`+` 放滚动区内才能跟随最后一个页签（Chrome 行为）；`×` 放 `Scroll` 外才能固定右端；垂直居中复用「底边对齐 + margin.bottom」而非绝对定位；`terminateSelf()` 因本工程仅一个 UIAbility（MainAbility）即等效关闭整个应用，不新增权限。
+68. 验证：`node --test` 20 pass / 0 fail；`check-json5` 8 通过；`check-resources` 23 文件 89 处引用（较上轮 +6，新增按钮的图标与透明色引用）+ 4 配置 16 处；`check-structure` 23 文件 38 导入 / 7 ForEach / 8 TAG / 6 @ObjectLink 组件 8 调用 / 4 HTML。文档：README 使用说明第 3 条改写 + 具体实现新增「页签条布局」小节 + 基线数字更新；HANDOFF 更新 HEAD/提交链/现状/第十轮小节/待真机清单/踩坑 32/文件地图/环境备忘；新增 `.claude/context-summary-tab-strip-chrome.md`、`.claude/verification-report-tab-strip-chrome.md`（自评 95）。

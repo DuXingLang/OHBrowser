@@ -37,8 +37,10 @@ const CLOSE_ICON_SIZE: number = 16;
 // 工具栏高度与不可用按钮透明度
 const TOOLBAR_HEIGHT: number = 48;
 const DISABLED_OPACITY: number = 0.38;
-// 页签条右侧“新建页签”按钮尺寸
+// 页签条内“新建页签”/“关闭应用”按钮尺寸
 const NEW_TAB_SIZE: number = 28;
+// 页签条内按钮相对条底部上移的偏移，使其在 40vp 高的页签条内垂直居中
+const TAB_STRIP_BUTTON_BOTTOM: number = (TAB_STRIP_HEIGHT - NEW_TAB_SIZE) / 2;
 
 interface ToolButtonItem {
   imageSrc: Resource,
@@ -49,6 +51,9 @@ interface ToolButtonItem {
 export struct TabletTitle {
   @Link browser: Browser;
   @State arrayIndex: number = 0;
+  // 点击页签条最右侧的关闭按钮时退出应用，由 Index 注入实现
+  onExitApp: () => void = () => {
+  };
   private addr: string = '';
   private toolButton: ToolButtonItem[] = [
     {
@@ -78,7 +83,8 @@ export struct TabletTitle {
 
   build() {
     Column() {
-      // 页签条：横向滚动 + 新建页签按钮，激活页签白底顶部圆角，与下方工具栏融为一体
+      // 页签条（Chrome 风格）：页签默认靠左排列、横向滚动；“新建页签”按钮紧跟最后一个页签，
+      // 页签条最右侧固定“关闭应用”按钮。激活页签白底顶部圆角，与下方工具栏融为一体。
       Row() {
         Scroll() {
           Row({ space: 4 }) {
@@ -101,7 +107,23 @@ export struct TabletTitle {
                 }
               })
             }, (item: WebKey) => item.timestamp.toString())
+
+            // 新建页签：跟随最后一个页签，位于滚动区内；按钮垂直居中于页签条
+            Button({ type: ButtonType.Normal, stateEffect: true }) {
+              Image($r('app.media.ic_public_add')).width(16).height(16)
+            }
+            .id('newTabButton')
+            .width(NEW_TAB_SIZE)
+            .height(NEW_TAB_SIZE)
+            .borderRadius(6)
+            .backgroundColor($r('app.color.transparent'))
+            .margin({ left: 4, bottom: TAB_STRIP_BUTTON_BOTTOM })
+            .accessibilityText('新建页签')
+            .onClick((event: ClickEvent) => {
+              this.browser.addTab();
+            })
           }
+          .justifyContent(FlexAlign.Start)
           .alignItems(VerticalAlign.Bottom)
           .height('100%')
         }
@@ -110,18 +132,19 @@ export struct TabletTitle {
         .layoutWeight(1)
         .height('100%')
 
+        // 关闭应用：参照桌面 Chrome 右侧窗口控制区，点击退出当前浏览器应用
         Button({ type: ButtonType.Normal, stateEffect: true }) {
-          Image($r('app.media.ic_public_add')).width(16).height(16)
+          Image($r('app.media.ic_public_cancel_filled')).width(16).height(16)
         }
-        .id('newTabButton')
-        .width(28)
-        .height(28)
+        .id('exitButton')
+        .width(NEW_TAB_SIZE)
+        .height(NEW_TAB_SIZE)
         .borderRadius(6)
         .backgroundColor($r('app.color.transparent'))
-        .margin({ right: 8 })
-        .accessibilityText('新建页签')
+        .margin({ left: 4, right: 4, bottom: TAB_STRIP_BUTTON_BOTTOM })
+        .accessibilityText('关闭应用')
         .onClick((event: ClickEvent) => {
-          this.browser.addTab();
+          this.onExitApp();
         })
       }
       .width('100%')
@@ -307,44 +330,85 @@ struct TabItem {
   }
 }
 
-// 手机布局的页签条：多于一个页签时显示，支持横向滚动
+// 手机布局的页签条：多于一个页签时显示，支持横向滚动。
+// 与平板页签条一致：页签靠左排列、新建页签按钮跟随最后一个页签、最右侧固定关闭应用按钮。
 @Component
 export struct BrowserTabs {
   @Link browser: Browser;
+  // 点击页签条最右侧的关闭按钮时退出应用，由 Index 注入实现
+  onExitApp: () => void = () => {
+  };
 
   build() {
-    // 页签数量多于一屏时可横向滚动，避免多余页签被裁掉、无法切换
-    Scroll() {
-      Row() {
-        ForEach(this.browser.webArray, (item: WebKey, index: number) => {
-          TabItem({
-            item: item,
-            active: this.browser.tabArrayIndex === item.key,
-            onSelect: (key: number) => {
-              Logger.info(TAG, `key= ${key}`);
-              // 关闭按钮与页签选择同源事件时可能收到已失效的下标，越界直接忽略
-              if (key < 0 || key >= this.browser.webArray.length) {
-                return;
+    Row() {
+      // 页签数量多于一屏时可横向滚动，避免多余页签被裁掉、无法切换
+      Scroll() {
+        Row({ space: 4 }) {
+          ForEach(this.browser.webArray, (item: WebKey, index: number) => {
+            TabItem({
+              item: item,
+              active: this.browser.tabArrayIndex === item.key,
+              onSelect: (key: number) => {
+                Logger.info(TAG, `key= ${key}`);
+                // 关闭按钮与页签选择同源事件时可能收到已失效的下标，越界直接忽略
+                if (key < 0 || key >= this.browser.webArray.length) {
+                  return;
+                }
+                this.browser.setTabArrayIndex(key);
+                this.browser.tabsController.changeIndex(key);
+                this.browser.updateHistoryState();
+              },
+              onClose: (key: number) => {
+                this.browser.deleteTab(key);
               }
-              this.browser.setTabArrayIndex(key);
-              this.browser.tabsController.changeIndex(key);
-              this.browser.updateHistoryState();
-            },
-            onClose: (key: number) => {
-              this.browser.deleteTab(key);
-            }
+            })
+          }, (item: WebKey) => item.timestamp.toString())
+
+          // 新建页签：跟随最后一个页签，位于滚动区内；按钮垂直居中于页签条
+          Button({ type: ButtonType.Normal, stateEffect: true }) {
+            Image($r('app.media.ic_public_add')).width(16).height(16)
+          }
+          .id('newTabButton')
+          .width(NEW_TAB_SIZE)
+          .height(NEW_TAB_SIZE)
+          .borderRadius(6)
+          .backgroundColor($r('app.color.transparent'))
+          .margin({ left: 4, bottom: TAB_STRIP_BUTTON_BOTTOM })
+          .accessibilityText('新建页签')
+          .onClick((event: ClickEvent) => {
+            this.browser.addTab();
           })
-        }, (item: WebKey) => item.timestamp.toString())
+        }
+        .justifyContent(FlexAlign.Start)
+        .alignItems(VerticalAlign.Bottom)
+        .height('100%')
       }
-      .alignItems(VerticalAlign.Bottom)
+      .scrollable(ScrollDirection.Horizontal)
+      .scrollBar(BarState.Off)
+      .layoutWeight(1)
       .height('100%')
+
+      // 关闭应用：参照桌面 Chrome 右侧窗口控制区，点击退出当前浏览器应用
+      Button({ type: ButtonType.Normal, stateEffect: true }) {
+        Image($r('app.media.ic_public_cancel_filled')).width(16).height(16)
+      }
+      .id('exitButton')
+      .width(NEW_TAB_SIZE)
+      .height(NEW_TAB_SIZE)
+      .borderRadius(6)
+      .backgroundColor($r('app.color.transparent'))
+      .margin({ left: 4, right: 4, bottom: TAB_STRIP_BUTTON_BOTTOM })
+      .accessibilityText('关闭应用')
+      .onClick((event: ClickEvent) => {
+        this.onExitApp();
+      })
     }
-    .scrollable(ScrollDirection.Horizontal)
-    .scrollBar(BarState.Off)
-    .height(TAB_STRIP_HEIGHT)
     .width('100%')
+    .height(TAB_STRIP_HEIGHT)
+    .padding({ left: 4, right: 4 })
     .flexShrink(0)
     .backgroundColor($r('app.color.tab_bar_bg'))
+    .alignItems(VerticalAlign.Bottom)
   }
 }
 

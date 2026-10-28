@@ -39,6 +39,58 @@ function lineOf(text, index) {
   return line;
 }
 
+/** 把注释内容替换为等长空格（保留换行与字符偏移），避免注释里提到的错误写法被静态检查误报 */
+function maskComments(text) {
+  let out = '';
+  let quote = '';
+  let i = 0;
+  while (i < text.length) {
+    const ch = text[i];
+    if (quote) {
+      out += ch;
+      if (ch === '\\') {
+        out += text[i + 1] ?? '';
+        i += 2;
+        continue;
+      }
+      if (ch === quote) {
+        quote = '';
+      }
+      i++;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') {
+      quote = ch;
+      out += ch;
+      i++;
+      continue;
+    }
+    if (ch === '/' && text[i + 1] === '/') {
+      while (i < text.length && text[i] !== '\n') {
+        out += ' ';
+        i++;
+      }
+      continue;
+    }
+    if (ch === '/' && text[i + 1] === '*') {
+      out += '  ';
+      i += 2;
+      while (i < text.length && !(text[i] === '*' && text[i + 1] === '/')) {
+        out += text[i] === '\n' ? '\n' : ' ';
+        i++;
+      }
+      if (i < text.length) {
+        out += '  ';
+        i += 2;
+      }
+      continue;
+    }
+    out += ch;
+    i++;
+  }
+  return out;
+}
+
 const sources = [
   ...walk(join(ROOT, 'entry/src/main/ets')),
   ...walk(join(ROOT, 'entry/src/ohosTest/ets'))
@@ -358,6 +410,22 @@ for (const file of sources) {
           fail(`${rel(file)}:${lineOf(text, m.index)} ${name} 缺少 @ObjectLink 参数 ${prop}（定义在 ${info.file}）`);
         }
       }
+    }
+  }
+}
+
+// 4.3 Web 组件的全局符号不得写进 webview 命名空间：
+//     WebDarkMode / FullScreenExitHandler 声明在 component/web.d.ts 的全局作用域，
+//     @ohos.web.webview 并未导出它们，写成 webview.X 会直接编译失败
+//     （ArkTS 报 "Property 'X' does not exist on type 'typeof webview'"）。
+const WEB_GLOBAL_SYMBOLS = ['WebDarkMode', 'FullScreenExitHandler'];
+for (const file of sources) {
+  // 注释里会用错误写法举例，先屏蔽注释再匹配，避免检查器误报
+  const text = maskComments(readFileSync(file, 'utf8'));
+  for (const symbol of WEB_GLOBAL_SYMBOLS) {
+    for (const m of text.matchAll(new RegExp(`\\bwebview\\.${symbol}\\b`, 'g'))) {
+      fail(`${rel(file)}:${lineOf(text, m.index)} 使用了 webview.${symbol}，` +
+        `但该符号是 Web 组件的全局声明，应直接写 ${symbol}（@ohos.web.webview 未导出）`);
     }
   }
 }

@@ -1,7 +1,7 @@
 # HANDOFF — OpenHarmony Browser 示例优化（会话交接）
 
 > 写给零上下文的新会话。接手前请通读本文，尤其是最后的“踩坑清单”。
-> 更新时间：2026-10-27 17:35 · 工作目录 `D:\project\Browser` · Git 流程：`2056c72`（原版）→ `164919b`（第一轮）→ `90d35e7`（第二轮）→ `5e6ccb5`（第三轮）→ `45cff8e`（第四轮）→ `edd5171`（第五轮）→ `5c51869`（第六轮，最新，已推送）
+> 更新时间：2026-10-28 15:10 · 工作目录 `D:\project\Browser` · Git 流程：`2056c72`（原版）→ `164919b`（第一轮）→ `90d35e7`（第二轮）→ `5e6ccb5`（第三轮）→ `45cff8e`（第四轮）→ `edd5171`（第五轮）→ `5c51869`（第六轮）→ `c866326`（第七轮，文档）→ 本轮（第八轮，编译错误修复，工作区未提交）
 
 ---
 
@@ -25,7 +25,9 @@
 - 第五轮（`edd5171`，已推送）：页面内查找（`searchAllAsync`/`searchNext`/`clearMatches` + `onSearchResultReceive`）与书签（纯函数序列化 + preferences 持久化 + 面板），补 7 个书签单测。
 - 第六轮（`5c51869`，已推送）：`window.open` 新页签支持（`onWindowNew`/`onWindowExit` + `allowWindowOpenMethod`）与历史记录（纯函数去重/上限 + preferences 持久化 + 面板），补 6 个历史单测。
 
-**本轮（第七轮，会话收尾）**：仅更新本交接文档使其与实际提交一致，无代码改动。
+**第七轮（`c866326`，已推送）**：仅更新本交接文档使其与实际提交一致，无代码改动。
+
+**第八轮（本轮，未提交）**：修复用户 DevEco 构建报出的 3 条编译错误——`WebDarkMode` 与 `FullScreenExitHandler` 被误写成 `webview.` 命名空间成员（`Browser.ets:405:39`、`TitleBar.ets:396:57`、`396:82`，另有 `Browser.ets:306` 同类字段）；`tests/check-structure.mjs` 新增规则拦截同类误写。
 
 ## 三、当前卡在哪（环境限制，非代码问题）
 
@@ -127,6 +129,16 @@ node tests/check-structure.mjs → 23 个源文件 38 处相对导入、7 处 Fo
 - **面板 `HistoryPanel.ets`**：与 `BookmarkPanel` 同构（标题「历史记录」+「清空」（无记录时置灰）+ 关闭按钮；列表行显示标题/域名兜底 + 地址 + 访问时间，整行点击跳转、右侧删除按钮），`constraintSize({ maxHeight: 320 })` 内部滚动。
 - **6 个历史单测**：`tests/history.test.mjs`（追加置顶、同址去重且更新为最新、空 URL 忽略、超上限丢最旧、删除、时间格式化）。
 
+### 第八轮（编译错误修复）
+
+用户在有 DevEco 的机器上首次真正编译，报 3 条错误（`Browser.ets:405:39`、`TitleBar.ets:396:57`、`TitleBar.ets:396:82`），另 `Browser.ets:306` 有同类字段声明。
+
+- **根因**：`WebDarkMode`、`FullScreenExitHandler` 声明在 Web 组件侧 `component/web.d.ts` 的全局作用域，`@ohos.web.webview` 命名空间**没有**导出它们。第四轮凭 `webview.WebDarkMode` 写法实现（当时无编译器），旧版踩坑 18 还把结论写反了，于是错误潜伏到真机编译。
+- **证据（官方 API 12 文档示例，本地副本）**：`web-attr.md:1605-1622` 的 darkMode 示例虽然 `import { webview } from '@kit.ArkWeb'`，用的是裸 `WebDarkMode.On`；`web-attr.md:5291-5313`、`5331-5356` 的 onFullScreenEnter/Exit 示例同样裸写 `FullScreenExitHandler`。反向核对：`webview.md` 全文不含这两个符号，而 `WebDownloadDelegate`/`WebCookieManager`/`WebStorage` 都以 `webview.X` 出现，说明两类符号归属不同。
+- **修复**：`Browser.ets:308`、`407` 去前缀 → `FullScreenExitHandler`；`TitleBar.ets:396` → `WebDarkMode.On / WebDarkMode.Auto`；`TitleBar.ets` 删除因此不再使用的 `import webview from '@ohos.web.webview'`；两处补中文注释说明归属，避免再次被改回去。
+- **防回归**：`tests/check-structure.mjs:418-432` 新增 4.3 规则，命中源码中 `webview.WebDarkMode` / `webview.FullScreenExitHandler` 即失败；配套 `maskComments`（`:43-97`）把注释替换为等长空格再匹配，避免注释里的反面示例被误报（同一坑即踩坑 13）。用临时探针文件验证过规则确实报错，删除后恢复全绿。
+- **验证**：`node --test` 20 pass；三项静态检查全绿（23 文件 38 导入 / 7 ForEach / 8 TAG / 6 个 @ObjectLink 组件 8 处调用 / 4 HTML）。
+
 ## 六、未闭环（环境限制，非代码问题）
 
 - 本机无 DevEco Studio / OpenHarmony SDK / hvigorw，**未做编译与真机运行验证**。换有 DevEco 5.0+ 的环境执行 `hvigorw assembleHap` 复核 ArkTS 严格模式告警。
@@ -134,6 +146,7 @@ node tests/check-structure.mjs → 23 个源文件 38 处相对导入、7 处 Fo
 - 第四轮待真机确认项：更多菜单 8 个入口逐项生效（尤其切换缓存/深色后当前页自动刷新）、页面内下载能落盘到 `files/Download/`、视频网站全屏进出、页签图标刷新、断网时的错误提示文案。
 - 第五轮待真机确认项：查找条对中文关键字的匹配计数、跨页面跳转后计数是否归零、书签面板在小屏（<600vp）与横屏下的高度与滚动、重启应用后书签是否仍在（`flush()` 是否真正落盘）、同一网址重复收藏是否只剩一条。
 - 第六轮待真机确认项：`window.open` 弹出的新页签能否在 10 页签上限时正确拒绝、`onWindowExit`（网页 `window.close()`）后页签是否关闭、历史面板在手机横屏/小屏下的高度与滚动、重启应用后历史是否仍在、`clearBrowsingData` 是否同时清空历史。
+- 第八轮待真机确认项：重新整包编译确认 3 条错误消失；全屏进出与 `forceDark` 深色适配仍正常。
 
 ## 七、踩过的坑（绝对不要再踩）
 
@@ -154,7 +167,7 @@ node tests/check-structure.mjs → 23 个源文件 38 处相对导入、7 处 Fo
 15. **pad.html 的 `adapterDevice` 现在是空实现**（原来靠改 viewport 写死 `width=720`，与 device-width 自适应冲突）。函数名不能删——ArkTS `onPageEnd` 会 `runJavaScript('adapterDevice()')` 调用它（`TitleBar.ets`）。
 16. git 提交后 LF→CRLF warning 是 Windows 正常现象，无需处理。
 17. `Browser.ets` 里 `import { formatUrl } from './UrlFormatter'; export { formatUrl };` 这两行是给外部与单测用的转出，**别删**。
-18. **`WebDarkMode` 不能裸写**：必须 `import webview from '@ohos.web.webview'` 后用 `webview.WebDarkMode.Auto`；`loadUrl`/`accessBackward`/`accessForward` 在 Web 未挂载时抛 17100001，必须 try/catch，否则点击新增页签即崩溃。
+18. **`WebDarkMode` / `FullScreenExitHandler` 必须裸写，不能加 `webview.` 前缀**：二者声明在 `component/web.d.ts`（Web 组件全局作用域），`@ohos.web.webview` 没有导出它们；写成 `webview.WebDarkMode` / `webview.FullScreenExitHandler` 会报 `Property ... does not exist on type 'typeof webview'` 与 `Namespace 'webview' has no exported member ...`（第八轮踩过，旧条目结论写反了）。`WebviewController`/`WebDownloadDelegate`/`WebCookieManager`/`WebStorage` 等才在 `webview` 命名空间里。另一半照旧：`loadUrl`/`accessBackward`/`accessForward` 在 Web 未挂载时抛 17100001，必须 try/catch，否则点击新增页签即崩溃。
 19. **用了 `TAG` 必须自己声明**：`Logger.info(TAG, ...)` 里的 `TAG` 若本文件没有 `const TAG`，编译期不报错、运行到该行才炸（`PhoneLayout.ets` 就踩了）。`check-structure.mjs` 已加规则。
 20. **@ObjectLink 必须由父组件传参**：`MoreMenuButton`/`WebTab` 都需要 `settings`，漏传会在运行时抛「ObjectLink must be initialized」。检查器已校验所有调用点。
 21. **不要给 `Browser` 直接加会驱动 UI 的开关**：`Browser` 不是 @Observed，加了也不会刷新。要联动的状态放 `WebSettings`（@Observed），用 @ObjectLink 绑。
@@ -197,7 +210,7 @@ tests/
 ├── history.test.mjs           # 6 用例：历史去重/上限/删除/时间格式化
 ├── check-json5.mjs            # json5 解析
 ├── check-resources.mjs        # 资源引用一致性
-└── check-structure.mjs        # 导入符号 / ForEach / TAG 声明 / @ObjectLink 传参 / HTML 结构
+└── check-structure.mjs        # 导入符号 / ForEach / TAG 声明 / @ObjectLink 传参 / 全局符号归属 / HTML 结构
 .claude/
 ├── context-summary-browser-round2.md
 ├── verification-report-browser-round2.md   # 自评 92 分
@@ -207,6 +220,8 @@ tests/
 ├── verification-report-find-bookmark.md    # 第五轮，自评 94 分
 ├── context-summary-window-history.md       # 第六轮（window.open + 历史）
 ├── verification-report-window-history.md   # 第六轮，自评 94 分
+├── context-summary-webview-symbols-fix.md  # 第八轮（WebDarkMode/FullScreenExitHandler）
+├── verification-report-webview-symbols-fix.md  # 第八轮，自评 95 分
 ├── context-summary-browser-optimization.md # 第一轮
 ├── verification-report-browser-optimization.md
 └── operations-log.md          # 各轮流水

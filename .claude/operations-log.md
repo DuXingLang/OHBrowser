@@ -81,3 +81,11 @@
 52. 单测：新增 `tests/history.test.mjs` 6 用例（追加置顶、同址去重且更新为最新、空 URL 忽略、超上限丢最旧、删除、时间格式化），`node --test` 合计 20 pass。
 53. 验证：`node --test` 20 pass / 0 fail；`check-json5` 8 个通过；`check-resources` 23 个源文件 83 处引用；`check-structure` 23 文件 38 导入 / 7 ForEach / 8 TAG / 6 个 @ObjectLink 组件 8 处调用 / 4 HTML。中途发现 HistoryStore 误导入已删除的 `parseHistory`/`stringifyHistory`，改为复用 `parseBookmarks`/`stringifyBookmarks`。
 54. 文档：README.md 补使用说明 13 条、文件地图（HistoryPanel/HistoryList/HistoryStore/history.test）、具体实现历史记录小节；HANDOFF.md 增第六轮小节与待真机确认项、验证基线更新、文件地图更新。
+
+### 第八轮：用户侧编译错误修复（WebDarkMode / FullScreenExitHandler）
+55. 现象：用户 DevEco 构建报 3 条错误——`Browser.ets:405:39 Namespace 'webview' has no exported member 'FullScreenExitHandler'`、`TitleBar.ets:396:57` 与 `396:82 Property 'WebDarkMode' does not exist on type 'typeof webview'`；另 `Browser.ets:306` 有同类字段声明。
+56. 根因：`WebDarkMode`、`FullScreenExitHandler` 声明在 `component/web.d.ts` 的全局作用域，`@ohos.web.webview` 命名空间没有导出它们（第四轮凭 `webview.WebDarkMode` 写法实现，当时无编译器；旧版踩坑 18 把结论写反了）。
+57. 证据（官方 API 12 文档示例，本地副本 `.git/dsh-docs/`）：`web-attr.md:1605-1622` 的 darkMode 示例虽 `import { webview }`，却裸写 `WebDarkMode.On`；`web-attr.md:5291-5313`、`5331-5356` 的 onFullScreenEnter/Exit 示例同样裸写 `FullScreenExitHandler`。反向核对：`webview.md` 全文无这两个符号，而 `WebDownloadDelegate`/`WebDownloadItem`/`WebCookieManager`/`WebStorage` 均以 `webview.X` 出现，两类符号归属不同。
+58. 修复：`entry/src/main/ets/model/Browser.ets:308`、`407` 去 `webview.` 前缀；`entry/src/main/ets/common/TitleBar.ets:396` 改 `WebDarkMode.On / WebDarkMode.Auto`；`TitleBar.ets` 删除已无用的 `import webview`；两处补中文注释说明归属。
+59. 防回归：`tests/check-structure.mjs:418-432` 新增 4.3 规则（`WEB_GLOBAL_SYMBOLS` 命中 `webview.WebDarkMode` / `webview.FullScreenExitHandler` 即失败），配套 `maskComments`（`:43-97`）把注释替换为等长空格后匹配；用临时探针文件验证规则确实报 2 条错，删除后恢复通过。
+60. 验证：`node --test` 20 pass / 0 fail；`check-json5` 8 个通过；`check-resources` 23 文件 83 处引用；`check-structure` 23 文件 38 导入 / 7 ForEach / 8 TAG / 6 个 @ObjectLink 组件 8 处调用 / 4 HTML。文档：HANDOFF.md 增第八轮小节、修正踩坑 18、补待真机确认项与文件地图；新增 `.claude/context-summary-webview-symbols-fix.md` 与 `.claude/verification-report-webview-symbols-fix.md`（自评 95 分）。工作区改动未提交（用户未要求）。

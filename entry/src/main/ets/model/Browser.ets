@@ -302,8 +302,10 @@ export class Browser {
   private mobileUserAgent: string = ''
   // 下载委托需要常驻引用，否则会被回收导致下载回调丢失
   private downloadDelegate: webview.WebDownloadDelegate | null = null
-  // 网页全屏退出句柄，由 Web 组件的 onFullScreenEnter 事件提供
-  private fullScreenHandler: webview.FullScreenExitHandler | null = null
+  // 网页全屏退出句柄，由 Web 组件的 onFullScreenEnter 事件提供。
+  // 注意：FullScreenExitHandler 是 Web 组件侧的全局声明（component/web.d.ts），
+  // 不在 @ohos.web.webview 命名空间内，写成 webview.FullScreenExitHandler 会编译不过。
+  private fullScreenHandler: FullScreenExitHandler | null = null
 
   // 取当前页签的控制器；未挂载到 Web 组件时返回 undefined
   private getController(): webview.WebviewController | undefined {
@@ -402,7 +404,7 @@ export class Browser {
   }
 
   // 网页请求进入全屏（如视频全屏播放）：隐藏应用标题栏与工具栏，并保存退出句柄
-  enterWebFullScreen(handler: webview.FullScreenExitHandler) {
+  enterWebFullScreen(handler: FullScreenExitHandler) {
     this.fullScreenHandler = handler;
     this.settings.isFullScreen = true;
   }

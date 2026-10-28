@@ -13,7 +13,6 @@
  * limitations under the License.
  */
 import { Browser, LoadingStatus, WebKey, WebObject, WebSettings } from '../model/Browser';
-import webview from '@ohos.web.webview';
 import Logger from '../model/Logger';
 import { promptAction } from '@kit.ArkUI';
 import { fileIo } from '@kit.CoreFileKit';
@@ -392,8 +391,9 @@ export struct WebTab {
             .verticalScrollBarAccess(true)
             // 缓存策略：禁用时强制每次请求都回源，便于调试弱网首屏
             .cacheMode(this.settings.noCache ? CacheMode.None : CacheMode.Default)
-            // 深色渲染：跟随系统；强制开启时把无深色样式的网页也做反色处理
-            .darkMode(this.settings.forceDark ? webview.WebDarkMode.On : webview.WebDarkMode.Auto)
+            // 深色渲染：跟随系统；强制开启时把无深色样式的网页也做反色处理。
+            // WebDarkMode 是 Web 组件侧的全局枚举（component/web.d.ts），不能写成 webview.WebDarkMode。
+            .darkMode(this.settings.forceDark ? WebDarkMode.On : WebDarkMode.Auto)
             .forceDarkAccess(this.settings.forceDark)
             .onWindowNew((event) => {
               Logger.info(TAG, `onWindowNew targetUrl: ${event?.targetUrl} isUserTrigger= ${event?.isUserTrigger}`);
